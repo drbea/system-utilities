@@ -1,50 +1,74 @@
 import subprocess
 import os
 import sys
+import platform
 
 """
-Ce script Python permet d'éteindre l'ordinateur sous Fedora Linux.
-Il demande une confirmation à l'utilisateur avant de procéder à l'arrêt.
+This Python script allows you to shut down the computer, regardless of the operating system.
+It asks for user confirmation before proceeding with the shutdown.
 
-Auteur: PEVE BEAVOGUI
-Fichier: shutdown_script.py
+Author: PEVE BEAVOGUI
+File: shutdown_script.py
 """
 
 def shutdown():
     """
-    Demande à l'utilisateur s'il est sûr de vouloir éteindre l'ordinateur.
-    Si l'utilisateur répond 'o' (oui), la commande 'sudo shutdown now' est exécutée
-    pour procéder à l'arrêt immédiat du système. Cette commande nécessite
-    généralement des privilèges administrateur (sudo).
+    Asks the user if they are sure they want to shut down the computer.
+    Depending on the detected operating system, the appropriate shutdown command
+    is executed.
 
-    Si l'utilisateur répond 'n' (non), l'opération est annulée.
-    Si l'utilisateur entre une autre valeur, un message d'erreur est affiché.
+    On Windows, it uses 'shutdown /s /t 5' with a 5-second timeout.
+    On Linux (including Ubuntu, Linux Mint, Kali Linux), it uses 'sudo shutdown now'.
+    On macOS, it uses 'sudo shutdown -h now'.
+    If the operating system is not recognized, a warning message is displayed.
 
-    En cas d'erreur lors de l'exécution de la commande d'arrêt (par exemple,
-    si 'sudo' requiert un mot de passe et qu'il n'est pas fourni), un message
-    d'erreur est affiché.
+    Executing the shutdown command on Linux and macOS usually requires
+    administrator privileges (sudo) and may prompt for a password.
+
+    If the user answers 'n' (no), the operation is canceled.
+    If the user enters any other value, an error message is displayed.
+
+    In case of an error during the execution of the shutdown command, an
+    error message is displayed.
     """
     while True:
-        entry = input("\tÊtes-vous sûr de vouloir éteindre votre ordinateur ?\n\tTapez 'o' pour Oui ou 'n' pour Non : ")
-        if entry.lower() == "o":
-            print("Extinction en cours...")
+        entry = input("\tAre you sure you want to shut down your computer?\n\tType 'y' for Yes or 'n' for No: ")
+        if entry.lower() == "y":
+            print("Shutting down...")
+            system = platform.system()
             try:
-                # Commande pour éteindre sous Fedora Linux (nécessite généralement sudo)
-                subprocess.run(["sudo", "shutdown", "now"], check=True)
-                print("À bientôt !")
-                break
+                if system == "Windows":
+                    # Added a 5-second timeout to allow the user to cancel if needed.
+                    subprocess.run(["shutdown", "/s", "/t", "5"], check=True)
+                    print("See you soon!")
+                    break
+                elif system == "Linux":
+                    subprocess.run(["sudo", "shutdown", "now"], check=True)
+                    print("See you soon!")
+                    break
+                elif system == "Darwin":  # macOS
+                    subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
+                    print("See you soon!")
+                    break
+                else:
+                    print(f"Operating system not recognized: {system}")
+                    print("Unable to execute the shutdown command automatically.")
+                    break
             except subprocess.CalledProcessError as e:
-                print(f"Erreur lors de l'arrêt : {e}")
-                print("Assurez-vous d'avoir les droits d'administrateur (sudo) pour exécuter cette commande.")
+                print(f"Error during shutdown: {e}")
+                if system == "Linux" or system == "Darwin":
+                    print("Make sure you have administrator rights (sudo) to execute this command.")
+                elif system == "Windows":
+                    print("Verify that the 'shutdown' command is available and that you have the necessary permissions.")
                 break
         elif entry.lower() == "n":
-            print("Opération annulée.")
+            print("Operation canceled.")
             break
         else:
-            print("Entrée invalide. Veuillez taper 'o' ou 'n'.")
-
-
+            print("Invalid input. Please type 'y' or 'n'.")
 
 if __name__ == "__main__":
-    shutdown()
-
+    try:
+        shutdown()
+    except KeyboardInterrupt:
+        print("\nShutdown operation interrupted by user.")
