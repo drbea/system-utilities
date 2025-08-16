@@ -234,6 +234,7 @@ fi
 
 # Django ou structure générique
 if $CREATE_DJANGO; then
+    mkdir -p src
     pip install django python-dotenv dj-database-url
     django-admin startproject config src/
     echo "✅ Projet Django initialisé."
@@ -269,4 +270,3 @@ echo "✅ Makefile ajouté."
 echo "✅ README.md créé."
 
 echo "🎉 Projet '$PROJECT_NAME' prêt dans $PROJECT_DIR"
-
