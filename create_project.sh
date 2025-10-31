@@ -35,19 +35,31 @@ show_help() {
 }
 
 generate_secret_key() {
-    python3 - <<'EOF'
+    $PYTHON_CMD - <<'EOF'
 import secrets
 print(secrets.token_urlsafe(50))
 EOF
 }
 
 check_dependencies() {
-    for cmd in python3 pip git; do
+    for cmd in git; do
         if ! command -v $cmd &>/dev/null; then
             echo "❌ Erreur : $cmd est requis mais non installé."
             exit 1
         fi
     done
+}
+
+detect_python() {
+    if command -v python3 &>/dev/null; then
+        PYTHON_CMD="python3"
+    elif command -v python &>/dev/null; then
+        PYTHON_CMD="python"
+    else
+        echo "❌ Erreur : Python n'est pas installé ni accessible dans le PATH."
+        echo "➡️ Installe Python depuis https://www.python.org/downloads/"
+        exit 1
+    fi
 }
 
 create_structure_generic() {
@@ -118,7 +130,7 @@ setup_database() {
 create_makefile() {
     cat <<'EOF' > Makefile
 setup:
-	python3 -m venv .venv
+	$(PYTHON_CMD) -m venv .venv
 	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install -r requirements.txt
 
@@ -212,6 +224,7 @@ done
 # ========================
 #   Setup Project
 # ========================
+detect_python
 check_dependencies
 
 if [[ -n "$PROJECT_NAME" ]]; then
@@ -226,9 +239,13 @@ echo "📂 Création du projet dans $PROJECT_DIR"
 
 # Virtualenv
 if $CREATE_VENV; then
-    python3 -m venv .venv
+    $PYTHON_CMD -m venv .venv
     echo "✅ Environnement virtuel créé."
-    source .venv/bin/activate
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win"* ]]; then
+        source .venv/Scripts/activate
+    else
+        source .venv/bin/activate
+    fi
     pip install --upgrade pip
 fi
 
@@ -268,5 +285,5 @@ create_readme
 
 echo "✅ Makefile ajouté."
 echo "✅ README.md créé."
-
+echo
 echo "🎉 Projet '$PROJECT_NAME' prêt dans $PROJECT_DIR"
