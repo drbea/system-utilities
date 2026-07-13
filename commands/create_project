@@ -1,0 +1,188 @@
+#!/bin/bash
+# commands/create_project — Scaffolding de projets Python/Django
+# Usage: create_project [options] [project_name]
+
+set -euo pipefail
+
+# ========================
+#   Source des librairies
+# ========================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/python.sh"
+source "$LIB_DIR/git.sh"
+source "$LIB_DIR/database.sh"
+
+# ========================
+#   Configuration par defaut
+# ========================
+CREATE_VENV=true
+VENV_NAME=".venv"
+INIT_GIT=true
+CREATE_DJANGO=false
+YES_MODE=false
+PROJECT_NAME=""
+CURRENT_DIR=$(pwd)
+
+# ========================
+#   Aide
+# ========================
+show_help() {
+    cat <<EOF
+Usage: create_project [options] [project_name]
+
+Options:
+  --no-venv             Ne pas creer d'environnement virtuel
+  --venv-name <name>    Nom du dossier venv (defaut: .venv)
+  --no-git              Ne pas initialiser de depot Git
+  --django              Creer un projet Django
+  --db <type>           Base de donnees : sqlite, postgres, mysql
+  --db-name <name>      Nom de la base de donnees
+  --db-user <user>      Utilisateur DB
+  --db-pass <pass>      Mot de passe DB
+  --yes                 Mode non interactif (choix par defaut)
+  --help                Affiche cette aide
+EOF
+    exit 0
+}
+
+# ========================
+#   Parse des options
+# ========================
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-venv) CREATE_VENV=false; shift ;;
+        --venv-name) VENV_NAME="$2"; shift 2 ;;
+        --no-git) INIT_GIT=false; shift ;;
+        --django) CREATE_DJANGO=true; shift ;;
+        --db) DB_CHOICE="$2"; shift 2 ;;
+        --db-name) DB_NAME="$2"; shift 2 ;;
+        --db-user) DB_USER="$2"; shift 2 ;;
+        --db-pass) DB_PASS="$2"; shift 2 ;;
+        --yes) YES_MODE=true; shift ;;
+        --help) show_help ;;
+        *) PROJECT_NAME="$1"; shift ;;
+    esac
+done
+
+# ========================
+#   Creation du projet
+# ========================
+
+# Verifier Python
+ensure_python
+
+# Creer le dossier du projet
+if [[ -n "$PROJECT_NAME" ]]; then
+    PROJECT_DIR="$CURRENT_DIR/$PROJECT_NAME"
+    mkdir -p "$PROJECT_DIR"
+    cd "$PROJECT_DIR"
+else
+    PROJECT_DIR="$CURRENT_DIR"
+    PROJECT_NAME=$(basename "$CURRENT_DIR")
+fi
+
+msg_info "Creation du projet dans $PROJECT_DIR"
+
+# Environnement virtuel
+if $CREATE_VENV; then
+    create_venv "$PROJECT_DIR" "$VENV_NAME"
+    upgrade_pip "$PROJECT_DIR" "$VENV_NAME"
+fi
+
+# Structure du projet
+if $CREATE_DJANGO; then
+    mkdir -p src
+    if $CREATE_VENV; then
+        activate_venv "$PROJECT_DIR" "$VENV_NAME"
+        pip install django python-dotenv dj-database-url --quiet
+    fi
+    django-admin startproject config src/
+    
+    # Split des settings Django (base.py, dev.py, prod.py)
+    split_django_settings "$PROJECT_DIR"
+    
+    msg_success "Projet Django initialise."
+else
+    mkdir -p src/"$PROJECT_NAME" tests docs
+    touch src/"$PROJECT_NAME"/__init__.py
+    msg_success "Structure Python generee."
+fi
+
+# Base de donnees
+setup_database "$PROJECT_NAME" \
+    ${YES_MODE:+--yes} \
+    ${DB_CHOICE:+--db "$DB_CHOICE"} \
+    ${DB_NAME:+--db-name "$DB_NAME"} \
+    ${DB_USER:+--db-user "$DB_USER"} \
+    ${DB_PASS:+--db-pass "$DB_PASS"}
+create_env_file "$PROJECT_DIR"
+
+# Requirements
+cat <<EOF > "$PROJECT_DIR/requirements.txt"
+Django>=5,<6
+python-dotenv
+dj-database-url
+EOF
+
+# Git
+if $INIT_GIT; then
+    init_git "$PROJECT_DIR"
+    create_gitignore "$PROJECT_DIR"
+fi
+
+# Makefile
+cat <<EOF > "$PROJECT_DIR/Makefile"
+VENV = $VENV_NAME
+
+setup:
+	\$PYTHON_CMD -m venv \$(VENV)
+	\$(VENV)/bin/pip install --upgrade pip
+	\$(VENV)/bin/pip install -r requirements.txt
+
+run:
+	\$(VENV)/bin/python src/manage.py runserver
+
+migrate:
+	\$(VENV)/bin/python src/manage.py migrate
+
+createsuperuser:
+	\$(VENV)/bin/python src/manage.py createsuperuser
+
+test:
+	\$PYTHON_CMD -m unittest discover tests
+
+freeze:
+	\$(VENV)/bin/pip freeze > requirements.txt
+
+clean:
+	rm -rf __pycache__ *.pyc \$(VENV)
+EOF
+
+# README
+cat <<EOF > "$PROJECT_DIR/README.md"
+# $PROJECT_NAME
+
+## Installation
+
+\`\`\`bash
+make setup
+\`\`\`
+
+## Lancer le serveur
+
+\`\`\`bash
+make run
+\`\`\`
+
+## Variables d'environnement
+
+Voir fichier \`.env.example\`.
+EOF
+
+msg_success "Makefile ajoute."
+msg_success "README.md cree."
+echo
+msg_success "Projet '$PROJECT_NAME' pret dans $PROJECT_DIR"

@@ -1,0 +1,136 @@
+#!/bin/bash
+# commands/django_collab — Serveur Django pour la collaboration
+# Usage: django_collab [options] [project_dir]
+
+set -euo pipefail
+
+# ========================
+#   Source des librairies
+# ========================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/python.sh"
+
+# ========================
+#   Configuration
+# ========================
+PORT=8000
+AUTO_PORT=true
+COLLECT_STATIC=false
+
+# ========================
+#   Aide
+# ========================
+show_help() {
+    cat <<EOF
+Usage: django_collab [options] [project_dir]
+
+Options:
+  --port <port>     Port du serveur (defaut: 8000)
+  --collectstatic   Lancer collectstatic avant le serveur
+  --help            Affiche cette aide
+EOF
+    exit 0
+}
+
+# ========================
+#   Parse des options
+# ========================
+PROJECT_DIR=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --port) PORT="$2"; AUTO_PORT=false; shift 2 ;;
+        --collectstatic) COLLECT_STATIC=true; shift ;;
+        --help) show_help ;;
+        *) PROJECT_DIR="$1"; shift ;;
+    esac
+done
+
+# Dossier par defaut
+PROJECT_DIR="${PROJECT_DIR:-.}"
+cd "$PROJECT_DIR" || exit 1
+
+# ========================
+#   Nettoyage au Ctrl+C
+# ========================
+cleanup() {
+    msg_cleanup "Fermeture du port $PORT..."
+    if command -v firewall-cmd &>/dev/null; then
+        sudo firewall-cmd --permanent --remove-port="$PORT"/tcp 2>/dev/null || true
+        sudo firewall-cmd --reload 2>/dev/null || true
+    fi
+    msg_success "Nettoye."
+    exit 0
+}
+
+trap cleanup SIGINT SIGTERM
+
+# ========================
+#   Verification
+# ========================
+if [[ ! -f "manage.py" ]]; then
+    msg_error "Aucun manage.py trouve dans $PROJECT_DIR"
+    msg_info "Ce dossier ne semble pas etre un projet Django."
+    exit 1
+fi
+
+ensure_python
+
+# ========================
+#   Port disponible
+# ========================
+if $AUTO_PORT; then
+    PORT=$(find_available_port 8000)
+    msg_info "Port auto-detecte : $PORT"
+fi
+
+if ! port_available "$PORT"; then
+    msg_warn "Port $PORT occupe."
+    if $AUTO_PORT; then
+        PORT=$(find_available_port $((PORT + 1)))
+        msg_info "Port alternatif : $PORT"
+    else
+        msg_error "Port $PORT deja utilise. Essayez --port <autre_port>"
+        exit 1
+    fi
+fi
+
+# ========================
+#   Migrations
+# ========================
+if [ "$($PYTHON_CMD manage.py showmigrations 2>/dev/null | grep -c '\[ \]')" -gt 0 ]; then
+    msg_progress "Migrations en attente..."
+    $PYTHON_CMD manage.py makemigrations --dry-run 2>/dev/null || true
+    $PYTHON_CMD manage.py migrate
+fi
+
+# ========================
+#   Collectstatic (optionnel)
+# ========================
+if $COLLECT_STATIC; then
+    msg_progress "Collectstatic..."
+    $PYTHON_CMD manage.py collectstatic --noinput
+fi
+
+# ========================
+#   Firewall
+# ========================
+if command -v firewall-cmd &>/dev/null; then
+    msg_progress "Ouverture du port $PORT..."
+    sudo firewall-cmd --permanent --add-port="$PORT"/tcp 2>/dev/null || true
+    sudo firewall-cmd --reload 2>/dev/null || true
+fi
+
+# ========================
+#   Demarrage
+# ========================
+IP=$(get_lan_ip)
+echo
+msg_result "http://${IP:-localhost}:$PORT"
+msg_info "Ctrl+C pour arreter"
+echo
+
+$PYTHON_CMD manage.py runserver "0.0.0.0:$PORT"
