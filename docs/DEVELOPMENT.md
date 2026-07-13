@@ -63,15 +63,15 @@ system-utilities/
 | 2.8 | Vérification post-install | ✅ | |
 | 2.9 | Créer `uninstall.sh` | ✅ | Avec --force pour skipper la confirmation |
 
-### Phase 3 : Auto-complétion Bash
+### Phase 3 : Auto-complétion Bash ✅ TERMINEE
 
 | # | Tâche | Statut | Notes |
 |---|-------|--------|-------|
-| 3.1 | Créer `completions/system-utilities.bash` | ⬜ | |
-| 3.2 | Complétion des options pour `create_project` | ⬜ | |
-| 3.3 | Complétion des options pour `django_collab` | ⬜ | |
-| 3.4 | Installation auto des completions | ⬜ | |
-| 3.5 | Tester le fonctionnement du Tab | ⬜ | |
+| 3.1 | Créer `completions/system-utilities.bash` | ✅ | |
+| 3.2 | Complétion des options pour `create_project` | ✅ | --no-venv, --venv-name, --django, --db, etc. |
+| 3.3 | Complétion des options pour `django_collab` | ✅ | --port, --collectstatic, etc. |
+| 3.4 | Installation auto des completions dans install.sh | ✅ | |
+| 3.5 | Tester le fonctionnement du Tab | ✅ | |
 
 ### Phase 4 : Enrichissement des commandes existantes
 

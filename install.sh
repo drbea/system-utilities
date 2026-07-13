@@ -129,6 +129,49 @@ detect_shell_rc() {
 }
 
 # ========================
+#   Completions
+# ========================
+install_completions() {
+    local use_sudo="${1:-}"
+    local completion_file="$SYSTEM_UTILS_DIR/completions/system-utilities.bash"
+
+    if [[ ! -f "$completion_file" ]]; then
+        msg_warn "Fichier de completions non trouve."
+        return 0
+    fi
+
+    # Dossier cible pour les completions
+    local completion_dir=""
+    local shell_rc
+    shell_rc=$(detect_shell_rc)
+
+    # Detecter le meilleur emplacement
+    if [[ -d "$HOME/.local/share/bash-completion/completions" ]]; then
+        completion_dir="$HOME/.local/share/bash-completion/completions"
+    elif [[ -d "/etc/bash_completion.d" ]] && [[ -w "/etc/bash_completion.d" ]]; then
+        completion_dir="/etc/bash_completion.d"
+    else
+        # Creer le dossier local
+        mkdir -p "$HOME/.local/share/bash-completion/completions"
+        completion_dir="$HOME/.local/share/bash-completion/completions"
+    fi
+
+    # Copier le fichier de completions
+    cp "$completion_file" "$completion_dir/system-utilities.bash"
+    msg_success "Completions installees dans $completion_dir"
+
+    # Ajouter le source dans le shell RC si pas deja present
+    if [[ -f "$shell_rc" ]] && ! grep -q "system-utilities.bash" "$shell_rc"; then
+        echo "" >> "$shell_rc"
+        echo "# system-utilities completions" >> "$shell_rc"
+        echo "if [[ -f '$completion_dir/system-utilities.bash' ]]; then" >> "$shell_rc"
+        echo "    source '$completion_dir/system-utilities.bash'" >> "$shell_rc"
+        echo "fi" >> "$shell_rc"
+        msg_success "Source ajoute dans $shell_rc"
+    fi
+}
+
+# ========================
 #   Installation
 # ========================
 install() {
