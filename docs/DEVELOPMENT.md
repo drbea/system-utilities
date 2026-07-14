@@ -88,14 +88,14 @@ system-utilities/
 | 4.9 | `create_project` : `--venv-name` pour nom du venv | ✅ | Defaut: .venv |
 | 4.10 | Django : split settings (base.py, dev.py, prod.py) | ✅ | base.py=commun, dev.py=DEBUG, prod.py=dj-database-url |
 
-### Phase 5 : FastAPI / Flask
+### Phase 5 : FastAPI / Flask ✅ TERMINEE
 
 | # | Tâche | Statut | Notes |
 |---|-------|--------|-------|
-| 5.1 | `create_project` : `--fastapi` | ⬜ | |
-| 5.2 | `create_project` : `--flask` | ⬜ | |
-| 5.3 | Templates de structure par framework | ⬜ | |
-| 5.4 | Makefile adapté par framework | ⬜ | |
+| 5.1 | `create_project` : `--fastapi` | ✅ | Structure FastAPI avec uvicorn |
+| 5.2 | `create_project` : `--flask` | ✅ | Structure Flask avec factory pattern |
+| 5.3 | Templates de structure par framework | ✅ | main.py pour FastAPI, __init__.py pour Flask |
+| 5.4 | Makefile adapté par framework | ✅ | run/dev cibles specifiques |
 
 ### Phase 6 : Nouvelles commandes
 

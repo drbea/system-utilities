@@ -22,6 +22,8 @@ CREATE_VENV=true
 VENV_NAME=".venv"
 INIT_GIT=true
 CREATE_DJANGO=false
+CREATE_FASTAPI=false
+CREATE_FLASK=false
 YES_MODE=false
 PROJECT_NAME=""
 CURRENT_DIR=$(pwd)
@@ -36,11 +38,15 @@ show_help() {
     cat <<EOF
 Usage: create_project [options] [project_name]
 
+Frameworks:
+  --django              Creer un projet Django
+  --fastapi             Creer un projet FastAPI
+  --flask               Creer un projet Flask
+
 Options:
   --no-venv             Ne pas creer d'environnement virtuel
   --venv-name <name>    Nom du dossier venv (defaut: .venv)
   --no-git              Ne pas initialiser de depot Git
-  --django              Creer un projet Django
   --db <type>           Base de donnees : sqlite, postgres, mysql
   --db-name <name>      Nom de la base de donnees
   --db-user <user>      Utilisateur DB
@@ -63,6 +69,8 @@ while [[ $# -gt 0 ]]; do
         --venv-name) VENV_NAME="$2"; shift 2 ;;
         --no-git) INIT_GIT=false; shift ;;
         --django) CREATE_DJANGO=true; shift ;;
+        --fastapi) CREATE_FASTAPI=true; shift ;;
+        --flask) CREATE_FLASK=true; shift ;;
         --db) DB_CHOICE="$2"; shift 2 ;;
         --db-name) DB_NAME="$2"; shift 2 ;;
         --db-user) DB_USER="$2"; shift 2 ;;
@@ -75,6 +83,17 @@ while [[ $# -gt 0 ]]; do
         *) PROJECT_NAME="$1"; shift ;;
     esac
 done
+
+# Verifier qu'un seul framework est selectionne
+FRAMEWORK_COUNT=0
+$CREATE_DJANGO && FRAMEWORK_COUNT=$((FRAMEWORK_COUNT + 1))
+$CREATE_FASTAPI && FRAMEWORK_COUNT=$((FRAMEWORK_COUNT + 1))
+$CREATE_FLASK && FRAMEWORK_COUNT=$((FRAMEWORK_COUNT + 1))
+
+if [[ $FRAMEWORK_COUNT -gt 1 ]]; then
+    msg_error "Selectionnez un seul framework (--django, --fastapi, --flask)"
+    exit 1
+fi
 
 # ========================
 #   Creation du projet
@@ -114,6 +133,32 @@ if $CREATE_DJANGO; then
     split_django_settings "$PROJECT_DIR"
     
     msg_success "Projet Django initialise."
+elif $CREATE_FASTAPI; then
+    mkdir -p src/"$PROJECT_NAME" tests docs
+    touch src/"$PROJECT_NAME"/__init__.py
+    
+    if $CREATE_VENV; then
+        activate_venv "$PROJECT_DIR" "$VENV_NAME"
+        pip install fastapi uvicorn python-dotenv pydantic --quiet
+    fi
+    
+    # Creer le fichier principal FastAPI
+    create_fastapi_app "$PROJECT_DIR" "$PROJECT_NAME"
+    
+    msg_success "Projet FastAPI initialise."
+elif $CREATE_FLASK; then
+    mkdir -p src/"$PROJECT_NAME" tests docs templates static
+    touch src/"$PROJECT_NAME"/__init__.py
+    
+    if $CREATE_VENV; then
+        activate_venv "$PROJECT_DIR" "$VENV_NAME"
+        pip install flask python-dotenv --quiet
+    fi
+    
+    # Creer le fichier principal Flask
+    create_flask_app "$PROJECT_DIR" "$PROJECT_NAME"
+    
+    msg_success "Projet Flask initialise."
 else
     mkdir -p src/"$PROJECT_NAME" tests docs
     touch src/"$PROJECT_NAME"/__init__.py
@@ -130,11 +175,30 @@ setup_database "$PROJECT_NAME" \
 create_env_file "$PROJECT_DIR"
 
 # Requirements
-cat <<EOF > "$PROJECT_DIR/requirements.txt"
+if $CREATE_DJANGO; then
+    cat <<EOF > "$PROJECT_DIR/requirements.txt"
 Django>=5,<6
 python-dotenv
 dj-database-url
 EOF
+elif $CREATE_FASTAPI; then
+    cat <<EOF > "$PROJECT_DIR/requirements.txt"
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+EOF
+elif $CREATE_FLASK; then
+    cat <<EOF > "$PROJECT_DIR/requirements.txt"
+flask>=3.0.0
+python-dotenv>=1.0.0
+EOF
+else
+    cat <<EOF > "$PROJECT_DIR/requirements.txt"
+python-dotenv>=1.0.0
+EOF
+fi
 
 # Git
 if $INIT_GIT; then
@@ -156,6 +220,10 @@ setup:
 	\$(PYTHON) -m venv \$(VENV)
 	\$(VENV)/bin/pip install --upgrade pip
 	\$(VENV)/bin/pip install -r requirements.txt
+EOF
+
+if $CREATE_DJANGO; then
+    cat <<EOF >> "$PROJECT_DIR/Makefile"
 
 run:
 	\$(VENV)/bin/python src/manage.py runserver
@@ -165,6 +233,34 @@ migrate:
 
 createsuperuser:
 	\$(VENV)/bin/python src/manage.py createsuperuser
+EOF
+elif $CREATE_FASTAPI; then
+    cat <<EOF >> "$PROJECT_DIR/Makefile"
+
+run:
+	\$(VENV)/bin/python -m uvicorn src.$PROJECT_NAME.main:app --reload --host 0.0.0.0 --port 8000
+
+dev:
+	\$(VENV)/bin/python -m uvicorn src.$PROJECT_NAME.main:app --reload --host 0.0.0.0 --port 8000
+EOF
+elif $CREATE_FLASK; then
+    cat <<EOF >> "$PROJECT_DIR/Makefile"
+
+run:
+	\$(VENV)/bin/python run.py
+
+dev:
+	\$(VENV)/bin/python run.py
+EOF
+else
+    cat <<EOF >> "$PROJECT_DIR/Makefile"
+
+run:
+	\$(VENV)/bin/python -m src.$PROJECT_NAME
+EOF
+fi
+
+cat <<EOF >> "$PROJECT_DIR/Makefile"
 
 test:
 	\$(PYTHON) -m unittest discover tests

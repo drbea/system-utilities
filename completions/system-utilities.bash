@@ -13,7 +13,7 @@ _complete_create_project() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Options disponibles
-    opts="--no-venv --venv-name --no-git --django --db --db-name --db-user --db-pass --author --license --python-version --yes --help"
+    opts="--no-venv --venv-name --no-git --django --fastapi --flask --db --db-name --db-user --db-pass --author --license --python-version --yes --help"
 
     # Si on est apres une option qui attend un argument
     case "$prev" in

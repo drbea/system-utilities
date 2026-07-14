@@ -450,3 +450,153 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.prod')
 application = get_asgi_application()
 EOF
 }
+
+# ========================
+#   FastAPI
+# ========================
+
+# Creer l'application FastAPI
+# Usage: create_fastapi_app /path/to/project project_name
+create_fastapi_app() {
+    local project_dir="${1:-.}"
+    local project_name="${2:-app}"
+    local app_dir="$project_dir/src/$project_name"
+
+    # Fichier principal
+    cat <<EOF > "$app_dir/main.py"
+"""
+$project_name - Application FastAPI
+"""
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI(title="$project_name")
+
+
+class HealthResponse(BaseModel):
+    status: str
+    message: str
+
+
+@app.get("/", response_model=HealthResponse)
+def root():
+    return HealthResponse(status="ok", message="Bienvenue sur $project_name")
+
+
+@app.get("/health", response_model=HealthResponse)
+def health():
+    return HealthResponse(status="ok", message="Sante OK")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+EOF
+
+    # Fichier de configuration
+    cat <<EOF > "$project_dir/src/config.py"
+"""
+Configuration pour $project_name
+"""
+import os
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    DEBUG: bool = True
+    SECRET_KEY: str = "changeme!"
+    APP_NAME: str = "$project_name"
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+
+settings = Settings()
+EOF
+
+    msg_success "Structure FastAPI creee."
+}
+
+# ========================
+#   Flask
+# ========================
+
+# Creer l'application Flask
+# Usage: create_flask_app /path/to/project project_name
+create_flask_app() {
+    local project_dir="${1:-.}"
+    local project_name="${2:-app}"
+    local app_dir="$project_dir/src/$project_name"
+
+    # Fichier principal
+    cat <<EOF > "$app_dir/__init__.py"
+"""
+$project_name - Application Flask
+"""
+import os
+from flask import Flask, jsonify
+
+
+def create_app(config_name=None):
+    app = Flask(__name__)
+
+    # Configuration
+    app.config["DEBUG"] = os.getenv("DEBUG", "True").lower() == "true"
+    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "changeme!")
+
+    # Routes
+    @app.route("/")
+    def root():
+        return jsonify(status="ok", message="Bienvenue sur $project_name")
+
+    @app.route("/health")
+    def health():
+        return jsonify(status="ok", message="Sante OK")
+
+    return app
+EOF
+
+    # Fichier run.py
+    cat <<EOF > "$project_dir/run.py"
+"""
+Point d'entree pour $project_name
+"""
+from src.$project_name import create_app
+
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, debug=True)
+EOF
+
+    # Fichier de configuration
+    cat <<EOF > "$project_dir/src/config.py"
+"""
+Configuration pour $project_name
+"""
+import os
+
+
+class Config:
+    DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+    SECRET_KEY = os.getenv("SECRET_KEY", "changeme!")
+
+
+class DevelopmentConfig(Config):
+    DEBUG = True
+
+
+class ProductionConfig(Config):
+    DEBUG = False
+
+
+config = {
+    "development": DevelopmentConfig,
+    "production": ProductionConfig,
+    "default": DevelopmentConfig,
+}
+EOF
+
+    msg_success "Structure Flask creee."
+}
