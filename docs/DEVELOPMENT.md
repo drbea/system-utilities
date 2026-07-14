@@ -73,18 +73,18 @@ system-utilities/
 | 3.4 | Installation auto des completions dans install.sh | ✅ | |
 | 3.5 | Tester le fonctionnement du Tab | ✅ | |
 
-### Phase 4 : Enrichissement des commandes existantes
+### Phase 4 : Enrichissement des commandes existantes ✅ TERMINEE
 
 | # | Tâche | Statut | Notes |
 |---|-------|--------|-------|
-| 4.1 | `create_project` : `--author` | ⬜ | |
-| 4.2 | `create_project` : `--license` | ⬜ | |
-| 4.3 | `create_project` : `--python-version` | ⬜ | |
-| 4.4 | Enrichir le Makefile | ⬜ | |
-| 4.5 | `django_collab` : `--port` paramétrable | ⬜ | |
-| 4.6 | `django_collab` : auto-détection port dispo | ⬜ | |
-| 4.7 | `django_collab` : `--collectstatic` | ⬜ | |
-| 4.8 | `django_collab` : logs en fichier | ⬜ | |
+| 4.1 | `create_project` : `--author` | ✅ | Inclut dans le README |
+| 4.2 | `create_project` : `--license` | ✅ | mit, gpl, apache, none |
+| 4.3 | `create_project` : `--python-version` | ✅ | Ex: 3.12 |
+| 4.4 | Enrichir le Makefile | ✅ | lint, format, check, clean ameliore |
+| 4.5 | `django_collab` : `--port` paramétrable | ✅ | |
+| 4.6 | `django_collab` : auto-détection port dispo | ✅ | Port 0 = auto |
+| 4.7 | `django_collab` : `--collectstatic` | ✅ | |
+| 4.8 | `django_collab` : logs en fichier | ✅ | --log-file <path> |
 | 4.9 | `create_project` : `--venv-name` pour nom du venv | ✅ | Defaut: .venv |
 | 4.10 | Django : split settings (base.py, dev.py, prod.py) | ✅ | base.py=commun, dev.py=DEBUG, prod.py=dj-database-url |
 

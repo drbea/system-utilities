@@ -13,12 +13,11 @@ _complete_create_project() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Options disponibles
-    opts="--no-venv --venv-name --no-git --django --db --db-name --db-user --db-pass --yes --help"
+    opts="--no-venv --venv-name --no-git --django --db --db-name --db-user --db-pass --author --license --python-version --yes --help"
 
     # Si on est apres une option qui attend un argument
     case "$prev" in
         --venv-name)
-            # Proposer des noms de venv courants
             COMPREPLY=( $(compgen -W ".venv env venv virtualenv" -- "$cur") )
             return 0
             ;;
@@ -26,13 +25,19 @@ _complete_create_project() {
             COMPREPLY=( $(compgen -W "sqlite postgres mysql" -- "$cur") )
             return 0
             ;;
-        --db-name|--db-user|--db-pass)
-            # Pas de completion pour les valeurs
+        --license)
+            COMPREPLY=( $(compgen -W "mit gpl apache none" -- "$cur") )
+            return 0
+            ;;
+        --python-version)
+            COMPREPLY=( $(compgen -W "3.10 3.11 3.12 3.13" -- "$cur") )
+            return 0
+            ;;
+        --db-name|--db-user|--db-pass|--author)
             return 0
             ;;
     esac
 
-    # Completion des options
     COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
     return 0
 }
@@ -47,18 +52,21 @@ _complete_django_collab() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Options disponibles
-    opts="--port --collectstatic --help"
+    opts="--port --collectstatic --log-file --help"
 
     # Si on est apres une option qui attend un argument
     case "$prev" in
         --port)
-            # Proposer des ports courants
             COMPREPLY=( $(compgen -W "8000 8080 3000 5000" -- "$cur") )
+            return 0
+            ;;
+        --log-file)
+            # Proposer des noms de fichiers
+            COMPREPLY=( $(compgen -f -X '!*.log' -- "$cur") )
             return 0
             ;;
     esac
 
-    # Completion des options
     COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
     return 0
 }

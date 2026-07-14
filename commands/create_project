@@ -25,6 +25,9 @@ CREATE_DJANGO=false
 YES_MODE=false
 PROJECT_NAME=""
 CURRENT_DIR=$(pwd)
+AUTHOR=""
+LICENSE_TYPE="none"
+PYTHON_VERSION=""
 
 # ========================
 #   Aide
@@ -42,6 +45,9 @@ Options:
   --db-name <name>      Nom de la base de donnees
   --db-user <user>      Utilisateur DB
   --db-pass <pass>      Mot de passe DB
+  --author <name>       Auteur du projet (pour le README)
+  --license <type>      Licence : mit, gpl, apache, none (defaut: none)
+  --python-version <v>  Version de Python (ex: 3.12)
   --yes                 Mode non interactif (choix par defaut)
   --help                Affiche cette aide
 EOF
@@ -61,6 +67,9 @@ while [[ $# -gt 0 ]]; do
         --db-name) DB_NAME="$2"; shift 2 ;;
         --db-user) DB_USER="$2"; shift 2 ;;
         --db-pass) DB_PASS="$2"; shift 2 ;;
+        --author) AUTHOR="$2"; shift 2 ;;
+        --license) LICENSE_TYPE="$2"; shift 2 ;;
+        --python-version) PYTHON_VERSION="$2"; shift 2 ;;
         --yes) YES_MODE=true; shift ;;
         --help) show_help ;;
         *) PROJECT_NAME="$1"; shift ;;
@@ -133,12 +142,18 @@ if $INIT_GIT; then
     create_gitignore "$PROJECT_DIR"
 fi
 
+# Licence
+if [[ "$LICENSE_TYPE" != "none" ]]; then
+    generate_license "$PROJECT_DIR" "$LICENSE_TYPE" "$AUTHOR"
+fi
+
 # Makefile
 cat <<EOF > "$PROJECT_DIR/Makefile"
 VENV = $VENV_NAME
+PYTHON = $PYTHON_CMD
 
 setup:
-	\$PYTHON_CMD -m venv \$(VENV)
+	\$(PYTHON) -m venv \$(VENV)
 	\$(VENV)/bin/pip install --upgrade pip
 	\$(VENV)/bin/pip install -r requirements.txt
 
@@ -152,19 +167,32 @@ createsuperuser:
 	\$(VENV)/bin/python src/manage.py createsuperuser
 
 test:
-	\$PYTHON_CMD -m unittest discover tests
+	\$(PYTHON) -m unittest discover tests
+
+lint:
+	\$(VENV)/bin/ruff check src/ tests/
+
+format:
+	\$(VENV)/bin/ruff format src/ tests/
+
+check:
+	\$(VENV)/bin/ruff check src/ tests/
+	\$(VENV)/bin/ruff format --check src/ tests/
 
 freeze:
 	\$(VENV)/bin/pip freeze > requirements.txt
 
 clean:
-	rm -rf __pycache__ *.pyc \$(VENV)
+	rm -rf __pycache__ *.pyc \$(VENV) .ruff_cache
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 EOF
 
 # README
 cat <<EOF > "$PROJECT_DIR/README.md"
 # $PROJECT_NAME
 
+${AUTHOR:+Auteur : $AUTHOR
+}
 ## Installation
 
 \`\`\`bash
@@ -176,6 +204,17 @@ make setup
 \`\`\`bash
 make run
 \`\`\`
+
+## Commandes utiles
+
+| Commande | Description |
+|---|---|
+| \`make setup\` | Installer les dependances |
+| \`make run\` | Lancer le serveur |
+| \`make migrate\` | Executer les migrations |
+| \`make test\` | Lancer les tests |
+| \`make lint\` | Verifier le code (ruff) |
+| \`make format\` | Formater le code (ruff) |
 
 ## Variables d'environnement
 

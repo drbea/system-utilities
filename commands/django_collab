@@ -19,6 +19,7 @@ source "$LIB_DIR/python.sh"
 PORT=8000
 AUTO_PORT=true
 COLLECT_STATIC=false
+LOG_FILE=""
 
 # ========================
 #   Aide
@@ -28,9 +29,10 @@ show_help() {
 Usage: django_collab [options] [project_dir]
 
 Options:
-  --port <port>     Port du serveur (defaut: 8000)
-  --collectstatic   Lancer collectstatic avant le serveur
-  --help            Affiche cette aide
+  --port <port>       Port du serveur (defaut: 8000, 0=auto)
+  --collectstatic     Lancer collectstatic avant le serveur
+  --log-file <path>   Rediriger les logs vers un fichier
+  --help              Affiche cette aide
 EOF
     exit 0
 }
@@ -44,6 +46,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --port) PORT="$2"; AUTO_PORT=false; shift 2 ;;
         --collectstatic) COLLECT_STATIC=true; shift ;;
+        --log-file) LOG_FILE="$2"; shift 2 ;;
         --help) show_help ;;
         *) PROJECT_DIR="$1"; shift ;;
     esac
@@ -133,4 +136,10 @@ msg_result "http://${IP:-localhost}:$PORT"
 msg_info "Ctrl+C pour arreter"
 echo
 
-$PYTHON_CMD manage.py runserver "0.0.0.0:$PORT"
+# Lancer avec ou sans log file
+if [[ -n "$LOG_FILE" ]]; then
+    msg_info "Logs dans : $LOG_FILE"
+    $PYTHON_CMD manage.py runserver "0.0.0.0:$PORT" 2>&1 | tee -a "$LOG_FILE"
+else
+    $PYTHON_CMD manage.py runserver "0.0.0.0:$PORT"
+fi
