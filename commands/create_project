@@ -124,8 +124,7 @@ fi
 if $CREATE_DJANGO; then
     mkdir -p src
     if $CREATE_VENV; then
-        activate_venv "$PROJECT_DIR" "$VENV_NAME"
-        pip install django python-dotenv dj-database-url --quiet
+        "$PROJECT_DIR/$VENV_NAME/bin/pip" install django python-dotenv dj-database-url --quiet
     fi
     django-admin startproject config src/
     
@@ -138,8 +137,7 @@ elif $CREATE_FASTAPI; then
     touch src/"$PROJECT_NAME"/__init__.py
     
     if $CREATE_VENV; then
-        activate_venv "$PROJECT_DIR" "$VENV_NAME"
-        pip install fastapi uvicorn python-dotenv pydantic --quiet
+        "$PROJECT_DIR/$VENV_NAME/bin/pip" install fastapi uvicorn python-dotenv pydantic --quiet
     fi
     
     # Creer le fichier principal FastAPI
@@ -151,8 +149,7 @@ elif $CREATE_FLASK; then
     touch src/"$PROJECT_NAME"/__init__.py
     
     if $CREATE_VENV; then
-        activate_venv "$PROJECT_DIR" "$VENV_NAME"
-        pip install flask python-dotenv --quiet
+        "$PROJECT_DIR/$VENV_NAME/bin/pip" install flask python-dotenv --quiet
     fi
     
     # Creer le fichier principal Flask
