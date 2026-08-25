@@ -40,8 +40,14 @@ Options:
   --no-security        Passer la verification de securite
   --no-dependencies    Passer la verification des dependances
   --fix                Tenter de corriger les problemes
+  --version            Affiche la version
   --help               Affiche cette aide
 EOF
+    exit 0
+}
+
+show_version() {
+    echo "check_project $SYSTEM_UTILITIES_VERSION"
     exit 0
 }
 
@@ -57,6 +63,7 @@ while [[ $# -gt 0 ]]; do
         --no-security) RUN_SECURITY=false; shift ;;
         --no-dependencies) RUN_DEPENDENCIES=false; shift ;;
         --fix) FIX_ISSUES=true; shift ;;
+        --version) show_version ;;
         --help) show_help ;;
         *) PROJECT_DIR="$1"; shift ;;
     esac

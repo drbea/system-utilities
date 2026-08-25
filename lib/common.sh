@@ -2,6 +2,11 @@
 # lib/common.sh — Fonctions communes : messages, validation, utilitaires
 
 # ========================
+#   Version
+# ========================
+SYSTEM_UTILITIES_VERSION="1.0.0"
+
+# ========================
 #   Messages
 # ========================
 msg_success()  { echo "[OK] $*"; }
