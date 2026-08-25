@@ -1,0 +1,134 @@
+#!/bin/bash
+# commands/migrate_project — Gestion des migrations Django
+# Usage: migrate_project [options] [project_dir]
+
+set -euo pipefail
+
+# ========================
+#   Source des librairies
+# ========================
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/python.sh"
+
+# ========================
+#   Configuration
+# ========================
+MAKE_MIGRATIONS=false
+CHECK_ONLY=false
+
+# ========================
+#   Aide
+# ========================
+show_help() {
+    cat <<EOF
+Usage: migrate_project [options] [project_dir]
+
+Gere les migrations Django (verifie, genere, applique).
+
+Options:
+  --make              Generer les migrations manquantes
+  --check             Verifier les migrations en attente
+  --verbose           Mode debug (affiche plus d'infos)
+  --version           Affiche la version
+  --help              Affiche cette aide
+EOF
+    exit 0
+}
+
+show_version() {
+    echo "migrate_project $SYSTEM_UTILITIES_VERSION"
+    exit 0
+}
+
+# ========================
+#   Parse des options
+# ========================
+PROJECT_DIR=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --make) MAKE_MIGRATIONS=true; shift ;;
+        --check) CHECK_ONLY=true; shift ;;
+        --verbose) VERBOSE=true; shift ;;
+        --version) show_version ;;
+        --help) show_help ;;
+        *) PROJECT_DIR="$1"; shift ;;
+    esac
+done
+
+# Dossier par defaut
+PROJECT_DIR="${PROJECT_DIR:-.}"
+
+if [[ ! -d "$PROJECT_DIR" ]]; then
+    msg_error "Le dossier $PROJECT_DIR n'existe pas."
+    exit 1
+fi
+
+cd "$PROJECT_DIR" || exit 1
+
+# ========================
+#   Verification
+# ========================
+if [[ ! -f "manage.py" ]] && [[ ! -f "src/manage.py" ]]; then
+    msg_error "Aucun manage.py trouve. Ce n'est pas un projet Django."
+    exit 1
+fi
+
+# Detecter manage.py
+MANAGE_PY="manage.py"
+if [[ -f "src/manage.py" ]]; then
+    MANAGE_PY="src/manage.py"
+fi
+
+ensure_python
+
+# ========================
+#   Verifier les migrations
+# ========================
+msg_progress "Verification des migrations..."
+
+PENDING=$($PYTHON_CMD $MANAGE_PY showmigrations 2>/dev/null | grep -c '\[ \]' || true)
+APPLIED=$($PYTHON_CMD $MANAGE_PY showmigrations 2>/dev/null | grep -c '\[x\]' || true)
+
+msg_info "Migrations appliquees : $APPLIED"
+msg_info "Migrations en attente : $PENDING"
+
+if $CHECK_ONLY; then
+    if [[ $PENDING -gt 0 ]]; then
+        msg_warn "Il reste $PENDING migration(s) a appliquer."
+        $PYTHON_CMD $MANAGE_PY showmigrations | grep '\[ \]'
+        exit 1
+    else
+        msg_success "Toutes les migrations sont appliquees."
+        exit 0
+    fi
+fi
+
+# ========================
+#   Generer les migrations
+# ========================
+if $MAKE_MIGRATIONS; then
+    msg_progress "Generation des migrations..."
+    $PYTHON_CMD $MANAGE_PY makemigrations
+    msg_success "Migrations generees."
+fi
+
+# ========================
+#   Appliquer les migrations
+# ========================
+if [[ $PENDING -gt 0 ]]; then
+    msg_progress "Application des migrations..."
+    $PYTHON_CMD $MANAGE_PY migrate
+    msg_success "Migrations appliquees."
+else
+    msg_success "Aucune migration en attente."
+fi
