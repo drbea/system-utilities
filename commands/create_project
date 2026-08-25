@@ -63,6 +63,7 @@ Options:
   --license <type>      Licence : mit, gpl, apache, none (defaut: none)
   --python-version <v>  Version de Python (ex: 3.12)
   --yes                 Mode non interactif (choix par defaut)
+  --verbose             Mode debug (affiche plus d'infos)
   --config              Ouvrir le fichier de configuration
   --show-config         Afficher la configuration actuelle
   --version             Affiche la version
@@ -95,6 +96,7 @@ while [[ $# -gt 0 ]]; do
         --license) LICENSE_TYPE="$2"; shift 2 ;;
         --python-version) PYTHON_VERSION="$2"; shift 2 ;;
         --yes) YES_MODE=true; shift ;;
+        --verbose) VERBOSE=true; shift ;;
         --config) ${EDITOR:-nano} "$CONFIG_FILE"; exit 0 ;;
         --show-config) show_config; exit 0 ;;
         --version) show_version ;;

@@ -41,6 +41,7 @@ Options:
   --remote-path <path> Chemin distant sur le serveur
   --docker             Creer un Dockerfile pour le deploiement
   --include-venv       Inclure l'environnement virtuel
+  --verbose            Mode debug (affiche plus d'infos)
   --version            Affiche la version
   --help               Affiche cette aide
 EOF
@@ -64,6 +65,7 @@ while [[ $# -gt 0 ]]; do
         --remote-path) REMOTE_PATH="$2"; shift 2 ;;
         --docker) BUILD_DOCKER=true; shift ;;
         --include-venv) INCLUDE_VENV=true; shift ;;
+        --verbose) VERBOSE=true; shift ;;
         --version) show_version ;;
         --help) show_help ;;
         *) PROJECT_DIR="$1"; shift ;;

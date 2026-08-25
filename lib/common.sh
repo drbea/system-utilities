@@ -7,6 +7,11 @@
 SYSTEM_UTILITIES_VERSION="1.0.0"
 
 # ========================
+#   Mode verbose
+# ========================
+VERBOSE=false
+
+# ========================
 #   Messages
 # ========================
 msg_success()  { echo "[OK] $*"; }
@@ -17,6 +22,7 @@ msg_question() { echo -n "[?] $*"; }
 msg_progress() { echo "[...] $*"; }
 msg_result()   { echo "[=>] $*"; }
 msg_cleanup()  { echo "[--] $*"; }
+msg_debug()    { $VERBOSE && echo "[DEBUG] $*" >&2 || true; }
 
 # ========================
 #   Validation
