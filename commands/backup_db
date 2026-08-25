@@ -1,0 +1,196 @@
+#!/bin/bash
+# commands/backup_db — Sauvegarde de bases de donnees
+# Usage: backup_db [options] [project_dir]
+
+set -euo pipefail
+
+# ========================
+#   Source des librairies
+# ========================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+source "$LIB_DIR/common.sh"
+
+# ========================
+#   Configuration
+# ========================
+BACKUP_DIR="backups"
+COMPRESS=true
+DB_TYPE=""
+DB_NAME=""
+DB_USER=""
+DB_HOST="localhost"
+DB_PORT=""
+
+# ========================
+#   Aide
+# ========================
+show_help() {
+    cat <<EOF
+Usage: backup_db [options] [project_dir]
+
+Options:
+  --dir <path>         Repertoire de sauvegarde (defaut: backups/)
+  --no-compress        Ne pas compresser l'archve
+  --db-type <type>     Type de BDD : sqlite, postgres, mysql
+  --db-name <name>     Nom de la base de donnees
+  --db-user <user>     Utilisateur de la BDD
+  --db-host <host>     Host de la BDD (defaut: localhost)
+  --db-port <port>     Port de la BDD
+  --help               Affiche cette aide
+EOF
+    exit 0
+}
+
+# ========================
+#   Parse des options
+# ========================
+PROJECT_DIR=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dir) BACKUP_DIR="$2"; shift 2 ;;
+        --no-compress) COMPRESS=false; shift ;;
+        --db-type) DB_TYPE="$2"; shift 2 ;;
+        --db-name) DB_NAME="$2"; shift 2 ;;
+        --db-user) DB_USER="$2"; shift 2 ;;
+        --db-host) DB_HOST="$2"; shift 2 ;;
+        --db-port) DB_PORT="$2"; shift 2 ;;
+        --help) show_help ;;
+        *) PROJECT_DIR="$1"; shift ;;
+    esac
+done
+
+# Dossier par defaut
+PROJECT_DIR="${PROJECT_DIR:-.}"
+
+if [[ ! -d "$PROJECT_DIR" ]]; then
+    msg_error "Le dossier $PROJECT_DIR n'existe pas."
+    exit 1
+fi
+
+cd "$PROJECT_DIR" || exit 1
+
+# ========================
+#   Detection du type de BDD
+# ========================
+if [[ -z "$DB_TYPE" ]]; then
+    # Detecter depuis .env
+    if [[ -f ".env" ]]; then
+        DB_URL=$(grep "^DATABASE_URL=" .env | cut -d'=' -f2-)
+        if [[ "$DB_URL" == sqlite* ]]; then
+            DB_TYPE="sqlite"
+        elif [[ "$DB_URL" == postgres* ]]; then
+            DB_TYPE="postgres"
+            # Extraire les infos de l'URL
+            DB_USER=$(echo "$DB_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
+            DB_PASS=$(echo "$DB_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
+            DB_NAME=$(echo "$DB_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
+        elif [[ "$DB_URL" == mysql* ]]; then
+            DB_TYPE="mysql"
+            DB_USER=$(echo "$DB_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
+            DB_PASS=$(echo "$DB_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
+            DB_NAME=$(echo "$DB_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
+        fi
+    fi
+    
+    # Detecter depuis manage.py (Django)
+    if [[ -z "$DB_TYPE" ]] && [[ -f "manage.py" ]]; then
+        DB_TYPE="sqlite"
+    fi
+fi
+
+# Default a sqlite
+DB_TYPE="${DB_TYPE:-sqlite}"
+
+msg_info "Type de BDD : $DB_TYPE"
+
+# ========================
+#   Creation du dossier de backup
+# ========================
+mkdir -p "$BACKUP_DIR"
+
+# ========================
+#   Nom du fichier de backup
+# ========================
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+PROJECT_NAME=$(basename "$(pwd)")
+BACKUP_FILE="$BACKUP_DIR/${PROJECT_NAME}-db-$TIMESTAMP"
+
+# ========================
+#   Sauvegarde
+# ========================
+case $DB_TYPE in
+    sqlite)
+        # Detecter le fichier SQLite
+        SQLITE_FILE=""
+        if [[ -f "db.sqlite3" ]]; then
+            SQLITE_FILE="db.sqlite3"
+        elif [[ -f "src/db.sqlite3" ]]; then
+            SQLITE_FILE="src/db.sqlite3"
+        else
+            # Chercher dans .env
+            if [[ -f ".env" ]]; then
+                SQLITE_FILE=$(grep "^DATABASE_URL=" .env | cut -d'=' -f2- | sed 's|sqlite:///||')
+            fi
+        fi
+        
+        if [[ -z "$SQLITE_FILE" ]] || [[ ! -f "$SQLITE_FILE" ]]; then
+            msg_error "Fichier SQLite non trouve."
+            exit 1
+        fi
+        
+        msg_progress "Sauvegarde de $SQLITE_FILE..."
+        cp "$SQLITE_FILE" "$BACKUP_FILE.db"
+        BACKUP_FILE="$BACKUP_FILE.db"
+        ;;
+    
+    postgres)
+        if [[ -z "$DB_NAME" ]]; then
+            msg_error "Nom de base de donnees requis (--db-name)"
+            exit 1
+        fi
+        
+        msg_progress "Sauvegarde PostgreSQL ($DB_NAME)..."
+        PGPASSWORD="${DB_PASS:-}" pg_dump \
+            -h "$DB_HOST" \
+            -p "${DB_PORT:-5432}" \
+            -U "${DB_USER:-postgres}" \
+            "$DB_NAME" > "$BACKUP_FILE.sql"
+        BACKUP_FILE="$BACKUP_FILE.sql"
+        ;;
+    
+    mysql)
+        if [[ -z "$DB_NAME" ]]; then
+            msg_error "Nom de base de donnees requis (--db-name)"
+            exit 1
+        fi
+        
+        msg_progress "Sauvegarde MySQL ($DB_NAME)..."
+        mysqldump \
+            -h "$DB_HOST" \
+            -P "${DB_PORT:-3306}" \
+            -u "${DB_USER:-root}" \
+            -p"${DB_PASS:-}" \
+            "$DB_NAME" > "$BACKUP_FILE.sql"
+        BACKUP_FILE="$BACKUP_FILE.sql"
+        ;;
+    
+    *)
+        msg_error "Type de BDD inconnu : $DB_TYPE"
+        exit 1
+        ;;
+esac
+
+# ========================
+#   Compression
+# ========================
+if $COMPRESS; then
+    msg_progress "Compression..."
+    gzip "$BACKUP_FILE"
+    BACKUP_FILE="$BACKUP_FILE.gz"
+    msg_success "Backup compresse : $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+else
+    msg_success "Backup cree : $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+fi
