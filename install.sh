@@ -282,7 +282,7 @@ verify_install() {
     echo
     msg_progress "Verification de l'installation..."
 
-    for cmd in create_project django_collab; do
+    for cmd in create_project django_collab deploy_project backup_db check_project; do
         if [[ -x "$install_dir/$cmd" ]]; then
             msg_success "$cmd installe"
         else
@@ -296,8 +296,11 @@ verify_install() {
         msg_success "Installation terminee !"
         echo
         msg_info "Commandes disponibles :"
-        echo "  create_project   — Creer un projet Python/Django"
+        echo "  create_project   — Creer un projet Python/Django/FastAPI/Flask"
         echo "  django_collab    — Serveur Django pour la collaboration"
+        echo "  deploy_project   — Deploier un projet"
+        echo "  backup_db        — Sauvegarder une base de donnees"
+        echo "  check_project    — Verifier un projet"
         echo
         msg_info "Redemarrez votre terminal ou executez :"
         echo "  source $(detect_shell_rc)"
