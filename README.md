@@ -1,125 +1,235 @@
 # system-utilities
 
-## 🚀 create_project.sh
+Suite d'outils Bash pour creer, gerer et deployer des projets Python web.
 
-Un script Bash universel pour créer rapidement des projets Python/Django avec :
+## Installation
 
-Environnement virtuel .venv automatique
-
-Support Django ou structure Python générique
-
-Configuration .env avec SECRET_KEY et DATABASE_URL
-
-Base de données : SQLite (par défaut), PostgreSQL ou MySQL/MariaDB
-
-Initialisation Git + .gitignore complet
-
-Makefile avec commandes utiles (setup, run, migrate, createsuperuser, …)
-
-README + .env.example générés automatiquement
-
-📦 Installation
-
-Cloner le dépôt :
 ```bash
 git clone https://github.com/drbea/system-utilities.git
-# ou 
-git clone git@github.com:drbea/system-utilities.git
 cd system-utilities
-chmod +x create_project.sh
+./install.sh
 ```
 
-▶️ Utilisation
-1. Créer un projet Django
-   ```bash
-   ./create_project.sh --django mon_projet
-   ```
-2. Créer un projet Python générique
-   ```bash
-   ./create_project.sh mon_package
-   ```
-3. Créer un projet dans le dossier courant
-   ```bash
-   ./create_project.sh --django
-   ```
-5. ⚙️ Options disponibles
-      | Option      | Description                                     |
-      | ----------- | ----------------------------------------------- |
-      | `--no-venv` | Ne pas créer d’environnement virtuel            |
-      | `--no-git`  | Ne pas initialiser de dépôt Git                 |
-      | `--django`  | Créer un projet Django (`src/config`)           |
-      | `--db`      | Base de données : `sqlite`, `postgres`, `mysql` |
-      | `--db-name` | Nom de la base (par défaut : `<project>_db`)    |
-      | `--db-user` | Utilisateur DB (postgres/mysql)                 |
-      | `--db-pass` | Mot de passe DB                                 |
-      | `--yes`     | Mode non interactif (tout par défaut)           |
-      | `--help`    | Affiche l’aide                                  |
+Redemarrez votre terminal apres l'installation.
 
-7. 🗃️ Exemple d’utilisation avec PostgreSQL
-   ```bash
-   ./create_project.sh --django --db postgres --db-name blog_db --db-user bloguser --db-pass secret blog
-   ```
-   Cela va créer :
-   Un projet Django dans src/config/
-   Un fichier .env :
-   ```
-   DEBUG=True
-   SECRET_KEY=xxxxxx
-   DATABASE_URL=postgres://bloguser:secret@localhost:5432/blog_db
-   ```
-   📂 Structure générée
-   Avec Django
-   ```arduino
-   mon_projet/
-      ├── .venv/
-      ├── src/
-      │   └── config/
-      ├── tests/
-      ├── docs/
-      ├── .env
-      ├── .env.example
-      ├── requirements.txt
-      ├── Makefile
-      ├── .gitignore
-      └── README.md
-   ```
-   Projet Python générique
-   ```arduino
-      mon_package/
-            ├── .venv/
-            ├── src/
-            │   └── mon_package/
-            │       └── __init__.py
-            ├── tests/
-            ├── docs/
-            ├── .env
-            ├── .env.example
-            ├── requirements.txt
-            ├── Makefile
-            ├── .gitignore
-            └── README.md
-   ```
-   🔧 Makefile inclus
-      | Commande               | Description                              |
-      | ---------------------- | ---------------------------------------- |
-      | `make setup`           | Crée `.venv` et installe les dépendances |
-      | `make run`             | Lance le serveur Django                  |
-      | `make migrate`         | Exécute les migrations Django            |
-      | `make createsuperuser` | Crée un super utilisateur Django         |
-      | `make test`            | Lance les tests unitaires                |
-      | `make freeze`          | Met à jour `requirements.txt`            |
-      | `make clean`           | Nettoie le projet                        |
+## Commandes disponibles
 
-9. 🤝 Contribution
+| Commande | Description |
+|----------|-------------|
+| `create_project` | Creer un projet Python/Django/FastAPI/Flask |
+| `django_collab` | Serveur Django pour la collaboration LAN |
+| `deploy_project` | Deploier un projet (archive ou serveur distant) |
+| `backup_db` | Sauvegarder une base de donnees |
+| `check_project` | Verifier un projet (lint, tests, securite) |
 
-Fork le repo 🍴
+---
 
-- Crée ta branche (```bash git checkout -b feature/ma-feature```)
+## create_project
 
-Commit tes changements (```bash git commit -m "Ajout nouvelle option"```)
+Creer rapidement un projet Python avec environnement virtuel, Git et dependances.
 
-Push ta branche (```bash git push origin feature/ma-feature```)
+### Exemples
 
-Ouvre une Pull Request 🚀
-10. ----
-   
+```bash
+# Projet Django
+create_project --django mon_projet
+
+# Projet FastAPI
+create_project --fastapi mon_api
+
+# Projet Flask
+create_project --flask mon_site
+
+# Avec base PostgreSQL
+create_project --django --db postgres --db-name blog_db blog
+
+# Mode non interactif
+create_project --django --yes mon_projet
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--django` | Creer un projet Django |
+| `--fastapi` | Creer un projet FastAPI |
+| `--flask` | Creer un projet Flask |
+| `--no-venv` | Ne pas creer d'environnement virtuel |
+| `--venv-name <nom>` | Nom du dossier venv (defaut: .venv) |
+| `--no-git` | Ne pas initialiser Git |
+| `--db <type>` | Base de donnees : sqlite, postgres, mysql |
+| `--db-name <nom>` | Nom de la base de donnees |
+| `--db-user <user>` | Utilisateur de la BDD |
+| `--db-pass <pass>` | Mot de passe de la BDD |
+| `--author <nom>` | Auteur (pour le README et la licence) |
+| `--license <type>` | Licence : mit, gpl, apache, none |
+| `--python-version <v>` | Version de Python (ex: 3.12) |
+| `--yes` | Mode non interactif |
+
+### Structure generee
+
+```
+mon_projet/
+├── .venv/
+├── src/
+│   └── config/          # ou mon_package/
+├── tests/
+├── docs/
+├── .env
+├── .env.example
+├── requirements.txt
+├── Makefile
+├── .gitignore
+└── README.md
+```
+
+---
+
+## django_collab
+
+Lancer un serveur de developpement Django pour la collaboration sur le reseau local.
+
+### Exemples
+
+```bash
+# Lancer dans le dossier courant
+cd mon_projet
+django_collab
+
+# Port personnalise
+django_collab --port 8080
+
+# Avec collectstatic
+django_collab --collectstatic
+
+# Avec logs dans un fichier
+django_collab --log-file serveur.log
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--port <port>` | Port du serveur (defaut: 8000, 0=auto) |
+| `--collectstatic` | Lancer collectstatic avant le serveur |
+| `--log-file <chemin>` | Rediriger les logs vers un fichier |
+| `--help` | Afficher l'aide |
+
+Le serveur demarre sur `0.0.0.0` pour etre accessible depuis les autres machines du reseau.
+
+---
+
+## deploy_project
+
+Preparer ou effectuer le deploiement d'un projet.
+
+### Exemples
+
+```bash
+# Creer une archive de deploiement
+deploy_project
+
+# Creer un Dockerfile
+deploy_project --docker
+
+# Deploier sur un serveur distant
+deploy_project --remote user@mon-serveur --remote-path /opt/mon_app
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--output <dir>` | Repertoire de sortie (defaut: deploy/) |
+| `--remote <user@host>` | Deploier sur un serveur distant (SSH) |
+| `--remote-path <path>` | Chemin distant sur le serveur |
+| `--docker` | Creer un Dockerfile |
+| `--include-venv` | Inclure l'environnement virtuel |
+
+---
+
+## backup_db
+
+Sauvegarder la base de donnees d'un projet.
+
+### Exemples
+
+```bash
+# Sauvegarde SQLite (detecte automatiquement)
+backup_db
+
+# Sauvegarde PostgreSQL
+backup_db --db-type postgres --db-name mon_blog
+
+# Sans compression
+backup_db --no-compress
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--dir <chemin>` | Repertoire de sauvegarde (defaut: backups/) |
+| `--no-compress` | Ne pas compresser l'archive |
+| `--db-type <type>` | Type de BDD : sqlite, postgres, mysql |
+| `--db-name <nom>` | Nom de la base de donnees |
+| `--db-user <user>` | Utilisateur de la BDD |
+| `--db-host <host>` | Host de la BDD (defaut: localhost) |
+| `--db-port <port>` | Port de la BDD |
+
+---
+
+## check_project
+
+Verifier l'etat d'un projet (lint, tests, securite, dependances).
+
+### Exemples
+
+```bash
+# Verification complete
+check_project
+
+# Sans les tests
+check_project --no-tests
+
+# Avec correction automatique
+check_project --fix
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--no-lint` | Passer la verification du lint |
+| `--no-tests` | Passer les tests |
+| `--no-security` | Passer la verification de securite |
+| `--no-dependencies` | Passer la verification des dependances |
+| `--fix` | Tenter de corriger les problemes |
+
+---
+
+## Desinstallation
+
+```bash
+./uninstall.sh
+```
+
+Ou via la commande d'installation :
+
+```bash
+./install.sh --uninstall
+```
+
+---
+
+## Contribution
+
+1. Fork le depot
+2. Creer une branche (`git checkout -b feature/ma-feature`)
+3. Commit les changements (`git commit -m "Ajout de ..."`)
+4. Push la branche (`git push origin feature/ma-feature`)
+5. Ouvrir une Pull Request
+
+## Licence
+
+GPL v3 - Voir le fichier LICENSE
