@@ -97,21 +97,21 @@ system-utilities/
 | 5.3 | Templates de structure par framework | ✅ | main.py pour FastAPI, __init__.py pour Flask |
 | 5.4 | Makefile adapté par framework | ✅ | run/dev cibles specifiques |
 
-### Phase 6 : Nouvelles commandes
+### Phase 6 : Nouvelles commandes ✅ TERMINEE
 
 | # | Tâche | Statut | Notes |
 |---|-------|--------|-------|
-| 6.1 | `deploy_project` | ⬜ | |
-| 6.2 | `backup_db` | ⬜ | |
-| 6.3 | `check_project` | ⬜ | |
+| 6.1 | `deploy_project` | ✅ | Archive, Dockerfile, deploiement SSH |
+| 6.2 | `backup_db` | ✅ | SQLite, PostgreSQL, MySQL |
+| 6.3 | `check_project` | ✅ | Lint, tests, securite, dependances |
 
-### Phase 7 : Documentation
+### Phase 7 : Documentation ✅ TERMINEE
 
 | # | Tâche | Statut | Notes |
 |---|-------|--------|-------|
-| 7.1 | README.md final | ⬜ | |
-| 7.2 | `--help` complet par commande | ⬜ | |
-| 7.3 | Exemples dans la doc | ⬜ | |
+| 7.1 | README.md final | ✅ | Toutes les commandes documentees |
+| 7.2 | `--help` complet par commande | ✅ | |
+| 7.3 | Exemples dans la doc | ✅ | Dans README.md |
 
 ---
 
