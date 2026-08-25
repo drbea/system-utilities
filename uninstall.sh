@@ -62,7 +62,7 @@ find_symlinks() {
 
     for dir in "${paths[@]}"; do
         if [[ -d "$dir" ]]; then
-            for cmd in create_project django_collab; do
+            for cmd in create_project django_collab deploy_project backup_db check_project; do
                 if [[ -L "$dir/$cmd" ]]; then
                     symlinks+=("$dir/$cmd")
                 fi

@@ -72,7 +72,92 @@ _complete_django_collab() {
 }
 
 # ========================
+#   Completions deploy_project
+# ========================
+_complete_deploy_project() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Options disponibles
+    opts="--output --remote --remote-path --docker --include-venv --help"
+
+    # Si on est apres une option qui attend un argument
+    case "$prev" in
+        --output)
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return 0
+            ;;
+        --remote)
+            # Pas de completion pour user@host
+            return 0
+            ;;
+        --remote-path)
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return 0
+            ;;
+    esac
+
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    return 0
+}
+
+# ========================
+#   Completions backup_db
+# ========================
+_complete_backup_db() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Options disponibles
+    opts="--dir --no-compress --db-type --db-name --db-user --db-host --db-port --help"
+
+    # Si on est apres une option qui attend un argument
+    case "$prev" in
+        --dir)
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return 0
+            ;;
+        --db-type)
+            COMPREPLY=( $(compgen -W "sqlite postgres mysql" -- "$cur") )
+            return 0
+            ;;
+        --db-name|--db-user|--db-host)
+            return 0
+            ;;
+        --db-port)
+            COMPREPLY=( $(compgen -W "5432 3306" -- "$cur") )
+            return 0
+            ;;
+    esac
+
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    return 0
+}
+
+# ========================
+#   Completions check_project
+# ========================
+_complete_check_project() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    # Options disponibles
+    opts="--no-lint --no-tests --no-security --no-dependencies --fix --help"
+
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    return 0
+}
+
+# ========================
 #   Enregistrement des completions
 # ========================
 complete -F _complete_create_project create_project
 complete -F _complete_django_collab django_collab
+complete -F _complete_deploy_project deploy_project
+complete -F _complete_backup_db backup_db
+complete -F _complete_check_project check_project
