@@ -21,6 +21,20 @@ Redemarrez votre terminal apres l'installation.
 | `deploy_project` | Deploier un projet (archive ou serveur distant) |
 | `backup_db` | Sauvegarder une base de donnees |
 | `check_project` | Verifier un projet (lint, tests, securite) |
+| `migrate_project` | Gerer les migrations Django |
+| `run_tests` | Lancer les tests d'un projet |
+
+---
+
+## Options globales
+
+Toutes les commandes supportent :
+
+| Option | Description |
+|--------|-------------|
+| `--version` | Afficher la version |
+| `--verbose` | Mode debug (plus d'infos) |
+| `--help` | Afficher l'aide |
 
 ---
 
@@ -65,6 +79,25 @@ create_project --django --yes mon_projet
 | `--license <type>` | Licence : mit, gpl, apache, none |
 | `--python-version <v>` | Version de Python (ex: 3.12) |
 | `--yes` | Mode non interactif |
+| `--config` | Ouvrir le fichier de configuration |
+| `--show-config` | Afficher la configuration actuelle |
+
+### Configuration
+
+Definir des valeurs par defaut :
+
+```bash
+create_project --config
+```
+
+Fichier `~/.system-utilities/config` :
+
+```
+AUTHOR=Mon Nom
+DB=sqlite
+VENV_NAME=.venv
+LICENSE=mit
+```
 
 ### Structure generee
 
@@ -72,7 +105,7 @@ create_project --django --yes mon_projet
 mon_projet/
 ├── .venv/
 ├── src/
-│   └── config/          # ou mon_package/
+│   └── core/          # ou mon_package/
 ├── tests/
 ├── docs/
 ├── .env
@@ -113,7 +146,6 @@ django_collab --log-file serveur.log
 | `--port <port>` | Port du serveur (defaut: 8000, 0=auto) |
 | `--collectstatic` | Lancer collectstatic avant le serveur |
 | `--log-file <chemin>` | Rediriger les logs vers un fichier |
-| `--help` | Afficher l'aide |
 
 Le serveur demarre sur `0.0.0.0` pour etre accessible depuis les autres machines du reseau.
 
@@ -208,6 +240,72 @@ check_project --fix
 
 ---
 
+## migrate_project
+
+Gerer les migrations Django.
+
+### Exemples
+
+```bash
+# Verifier les migrations en attente
+migrate_project --check
+
+# Generer et appliquer les migrations
+migrate_project --make
+
+# Appliquer les migrations
+migrate_project
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--make` | Generer les migrations manquantes |
+| `--check` | Verifier les migrations en attente |
+
+---
+
+## run_tests
+
+Lancer les tests d'un projet.
+
+### Exemples
+
+```bash
+# Lancer tous les tests
+run_tests
+
+# Avec couverture
+run_tests --coverage
+
+# Affichage detaille
+run_tests --verbose-output
+
+# Un seul fichier de test
+run_tests --pattern "test_models.py"
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--verbose-output` | Affichage detaille des tests |
+| `--coverage` | Generer un rapport de couverture |
+| `--pattern <glob>` | Pattern de fichiers de tests |
+
+---
+
+## Tests
+
+Lancer les tests automatises :
+
+```bash
+./tests/test_commands.sh
+```
+
+---
+
 ## Desinstallation
 
 ```bash
@@ -218,6 +316,17 @@ Ou via la commande d'installation :
 
 ```bash
 ./install.sh --uninstall
+```
+
+---
+
+## Docker
+
+Utiliser system-utilities dans un conteneur :
+
+```bash
+docker build -t system-utilities .
+docker run -it system-utilities
 ```
 
 ---

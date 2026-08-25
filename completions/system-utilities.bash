@@ -13,7 +13,7 @@ _complete_create_project() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Options disponibles
-    opts="--no-venv --venv-name --no-git --django --fastapi --flask --db --db-name --db-user --db-pass --author --license --python-version --yes --help"
+    opts="--no-venv --venv-name --no-git --django --fastapi --flask --db --db-name --db-user --db-pass --author --license --python-version --yes --verbose --config --show-config --version --help"
 
     # Si on est apres une option qui attend un argument
     case "$prev" in
@@ -52,7 +52,7 @@ _complete_django_collab() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Options disponibles
-    opts="--port --collectstatic --log-file --help"
+    opts="--port --collectstatic --log-file --verbose --version --help"
 
     # Si on est apres une option qui attend un argument
     case "$prev" in
@@ -81,7 +81,7 @@ _complete_deploy_project() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Options disponibles
-    opts="--output --remote --remote-path --docker --include-venv --help"
+    opts="--output --remote --remote-path --docker --include-venv --verbose --version --help"
 
     # Si on est apres une option qui attend un argument
     case "$prev" in
@@ -113,7 +113,7 @@ _complete_backup_db() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Options disponibles
-    opts="--dir --no-compress --db-type --db-name --db-user --db-host --db-port --help"
+    opts="--dir --no-compress --db-type --db-name --db-user --db-host --db-port --verbose --version --help"
 
     # Si on est apres une option qui attend un argument
     case "$prev" in
@@ -147,7 +147,47 @@ _complete_check_project() {
     cur="${COMP_WORDS[COMP_CWORD]}"
 
     # Options disponibles
-    opts="--no-lint --no-tests --no-security --no-dependencies --fix --help"
+    opts="--no-lint --no-tests --no-security --no-dependencies --fix --verbose --version --help"
+
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    return 0
+}
+
+# ========================
+#   Completions migrate_project
+# ========================
+_complete_migrate_project() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    # Options disponibles
+    opts="--make --check --verbose --version --help"
+
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    return 0
+}
+
+# ========================
+#   Completions run_tests
+# ========================
+_complete_run_tests() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Options disponibles
+    opts="--verbose-output --coverage --pattern --verbose --version --help"
+
+    # Si on est apres une option qui attend un argument
+    case "$prev" in
+        --pattern)
+            # Proposer des noms de fichiers
+            COMPREPLY=( $(compgen -f -X '!*.py' -- "$cur") )
+            return 0
+            ;;
+    esac
 
     COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
     return 0
@@ -161,3 +201,5 @@ complete -F _complete_django_collab django_collab
 complete -F _complete_deploy_project deploy_project
 complete -F _complete_backup_db backup_db
 complete -F _complete_check_project check_project
+complete -F _complete_migrate_project migrate_project
+complete -F _complete_run_tests run_tests
