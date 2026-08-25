@@ -1,0 +1,249 @@
+#!/bin/bash
+# commands/check_project — Verification de projets Python
+# Usage: check_project [options] [project_dir]
+
+set -euo pipefail
+
+# ========================
+#   Source des librairies
+# ========================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+source "$LIB_DIR/common.sh"
+
+# ========================
+#   Configuration
+# ========================
+RUN_LINT=true
+RUN_TESTS=true
+RUN_SECURITY=true
+RUN_DEPENDENCIES=true
+FIX_ISSUES=false
+
+# ========================
+#   Aide
+# ========================
+show_help() {
+    cat <<EOF
+Usage: check_project [options] [project_dir]
+
+Options:
+  --no-lint            Passer la verification du lint
+  --no-tests           Passer les tests
+  --no-security        Passer la verification de securite
+  --no-dependencies    Passer la verification des dependances
+  --fix                Tenter de corriger les problemes
+  --help               Affiche cette aide
+EOF
+    exit 0
+}
+
+# ========================
+#   Parse des options
+# ========================
+PROJECT_DIR=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-lint) RUN_LINT=false; shift ;;
+        --no-tests) RUN_TESTS=false; shift ;;
+        --no-security) RUN_SECURITY=false; shift ;;
+        --no-dependencies) RUN_DEPENDENCIES=false; shift ;;
+        --fix) FIX_ISSUES=true; shift ;;
+        --help) show_help ;;
+        *) PROJECT_DIR="$1"; shift ;;
+    esac
+done
+
+# Dossier par defaut
+PROJECT_DIR="${PROJECT_DIR:-.}"
+
+if [[ ! -d "$PROJECT_DIR" ]]; then
+    msg_error "Le dossier $PROJECT_DIR n'existe pas."
+    exit 1
+fi
+
+cd "$PROJECT_DIR" || exit 1
+
+# ========================
+#   Detection du framework
+# ========================
+FRAMEWORK="python"
+if [[ -f "src/manage.py" ]] || [[ -f "manage.py" ]]; then
+    FRAMEWORK="django"
+fi
+
+msg_info "Framework detecte : $FRAMEWORK"
+
+# ========================
+#   Compteur d'erreurs
+# ========================
+ERRORS=0
+WARNINGS=0
+
+# ========================
+#   Verification de la structure
+# ========================
+msg_progress "Verification de la structure..."
+
+# Fichiers essentiels
+for file in requirements.txt README.md; do
+    if [[ ! -f "$file" ]]; then
+        msg_error "Fichier manquant : $file"
+        ERRORS=$((ERRORS + 1))
+    fi
+done
+
+# Dossier src
+if [[ ! -d "src" ]]; then
+    msg_warn "Dossier src/ manquant"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# ========================
+#   Lint (ruff)
+# ========================
+if $RUN_LINT; then
+    echo
+    msg_progress "Verification du lint (ruff)..."
+    
+    if command -v ruff &>/dev/null; then
+        if ruff check src/ tests/ 2>/dev/null; then
+            msg_success "Lint OK"
+        else
+            msg_error "Erreurs de lint detectees"
+            ERRORS=$((ERRORS + 1))
+            if $FIX_ISSUES; then
+                msg_progress "Correction automatique..."
+                ruff check --fix src/ tests/ 2>/dev/null || true
+                msg_success "Corrections appliquees"
+            fi
+        fi
+    elif [[ -f ".venv/bin/ruff" ]]; then
+        if .venv/bin/ruff check src/ tests/ 2>/dev/null; then
+            msg_success "Lint OK"
+        else
+            msg_error "Erreurs de lint detectees"
+            ERRORS=$((ERRORS + 1))
+            if $FIX_ISSUES; then
+                msg_progress "Correction automatique..."
+                .venv/bin/ruff check --fix src/ tests/ 2>/dev/null || true
+                msg_success "Corrections appliquees"
+            fi
+        fi
+    else
+        msg_warn "ruff non trouve, lint ignore"
+        WARNINGS=$((WARNINGS + 1))
+    fi
+fi
+
+# ========================
+#   Tests
+# ========================
+if $RUN_TESTS; then
+    echo
+    msg_progress "Lancement des tests..."
+    
+    if [[ -d "tests" ]] && ls tests/test_*.py &>/dev/null 2>&1; then
+        PYTHON_CMD="python3"
+        if [[ -f ".venv/bin/python" ]]; then
+            PYTHON_CMD=".venv/bin/python"
+        fi
+        
+        if $PYTHON_CMD -m pytest tests/ -v 2>/dev/null; then
+            msg_success "Tests OK"
+        elif $PYTHON_CMD -m unittest discover tests 2>/dev/null; then
+            msg_success "Tests OK"
+        else
+            msg_error "Tests echoues"
+            ERRORS=$((ERRORS + 1))
+        fi
+    else
+        msg_warn "Aucun test trouve"
+        WARNINGS=$((WARNINGS + 1))
+    fi
+fi
+
+# ========================
+#   Securite (pip-audit)
+# ========================
+if $RUN_SECURITY; then
+    echo
+    msg_progress "Verification de securite..."
+    
+    PIP_CMD="pip3"
+    if [[ -f ".venv/bin/pip" ]]; then
+        PIP_CMD=".venv/bin/pip"
+    fi
+    
+    if $PIP_CMD show pip-audit &>/dev/null 2>&1; then
+        if $PIP_CMD audit -r requirements.txt 2>/dev/null; then
+            msg_success "Pas de vulnerabilitees connues"
+        else
+            msg_error "Vulnerabilitees detectees"
+            ERRORS=$((ERRORS + 1))
+        fi
+    else
+        msg_warn "pip-audit non installe (pip install pip-audit)"
+        WARNINGS=$((WARNINGS + 1))
+    fi
+fi
+
+# ========================
+#   Dependances
+# ========================
+if $RUN_DEPENDENCIES; then
+    echo
+    msg_progress "Verification des dependances..."
+    
+    if [[ -f "requirements.txt" ]]; then
+        PIP_CMD="pip3"
+        if [[ -f ".venv/bin/pip" ]]; then
+            PIP_CMD=".venv/bin/pip"
+        fi
+        
+        # Verifier que les packages sont installees
+        MISSING=0
+        while IFS= read -r line; do
+            # Ignorer les commentaires et lignes vides
+            [[ "$line" =~ ^#.*$ ]] && continue
+            [[ -z "$line" ]] && continue
+            
+            # Extraire le nom du package
+            PKG=$(echo "$line" | sed 's/[>=<!].*//' | tr -d ' ')
+            
+            if ! $PIP_CMD show "$PKG" &>/dev/null 2>&1; then
+                msg_warn "Package manquant : $PKG"
+                MISSING=$((MISSING + 1))
+            fi
+        done < requirements.txt
+        
+        if [[ $MISSING -eq 0 ]]; then
+            msg_success "Toutes les dependances sont installees"
+        else
+            WARNINGS=$((WARNINGS + MISSING))
+        fi
+    else
+        msg_warn "requirements.txt non trouve"
+        WARNINGS=$((WARNINGS + 1))
+    fi
+fi
+
+# ========================
+#   Resume
+# ========================
+echo
+echo "=========================="
+msg_info "Resume :"
+echo "  Erreurs    : $ERRORS"
+echo "  Avertissements : $WARNINGS"
+echo "=========================="
+
+if [[ $ERRORS -gt 0 ]]; then
+    msg_error "Des erreurs doivent etre corrigees."
+    exit 1
+else
+    msg_success "Verification terminee."
+    exit 0
+fi
