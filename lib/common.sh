@@ -67,8 +67,16 @@ get_lan_ip() {
 # Vérifier qu'un port est disponible
 port_available() {
     local port="$1"
-    ! ss -tlnp 2>/dev/null | grep -q ":$port " && \
-    ! lsof -i ":$port" &>/dev/null
+    if command -v ss &>/dev/null; then
+        ! ss -tlnp 2>/dev/null | grep -q ":$port "
+    elif command -v lsof &>/dev/null; then
+        ! lsof -i ":$port" &>/dev/null
+    elif command -v netstat &>/dev/null; then
+        ! netstat -tlnp 2>/dev/null | grep -q ":$port "
+    else
+        # Pas d'outil disponible, on considère le port libre
+        return 0
+    fi
 }
 
 # Trouver un port disponible à partir d'un port de base
