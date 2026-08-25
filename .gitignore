@@ -1,0 +1,8 @@
+# Dossiers de test
+tmp/
+
+# Fichiers temporaires
+*.swp
+*.swo
+*~
+.DS_Store
