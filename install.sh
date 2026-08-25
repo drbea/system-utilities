@@ -29,6 +29,7 @@ msg_error()    { echo -e "${RED}[ERR]${NC} $*" >&2; }
 msg_warn()     { echo -e "${YELLOW}[WARN]${NC} $*"; }
 msg_info()     { echo "[INFO] $*"; }
 msg_progress() { echo "[...] $*"; }
+msg_question() { echo -n "[?] $*"; }
 
 # ========================
 #   Aide
