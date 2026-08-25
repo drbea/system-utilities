@@ -175,6 +175,11 @@ install_completions() {
 #   Installation
 # ========================
 install() {
+    # Verifier installation existante
+    if $INTERACTIVE; then
+        check_existing_install || true
+    fi
+
     msg_progress "Detection du systeme..."
     local os
     os=$(detect_os)
@@ -326,7 +331,7 @@ uninstall() {
     local install_dir
     install_dir=$(detect_install_dir)
 
-    for cmd in create_project django_collab; do
+    for cmd in create_project django_collab deploy_project backup_db check_project; do
         if [[ -L "$install_dir/$cmd" ]]; then
             rm -f "$install_dir/$cmd"
             msg_success "Lien $cmd supprime."
@@ -354,6 +359,37 @@ uninstall() {
     done
 
     msg_success "Desinstallation terminee."
+}
+
+# ========================
+#   Verification install existante
+# ========================
+check_existing_install() {
+    if [[ ! -d "$SYSTEM_UTILS_DIR" ]]; then
+        return 1
+    fi
+
+    msg_warn "system-utilities est deja installe dans $SYSTEM_UTILS_DIR"
+
+    while true; do
+        echo
+        echo "Que souhaitez-vous faire ?"
+        echo "  1) Mettre a jour"
+        echo "  2) Reinstaller (nettoyer et reinstaller)"
+        echo "  3) Desinstaller"
+        echo "  4) Annuler"
+        echo
+        msg_question "Votre choix [1-4] : "
+        read -r choice
+
+        case "$choice" in
+            1) return 0 ;;
+            2) uninstall; return 0 ;;
+            3) uninstall; exit 0 ;;
+            4) msg_info "Annule."; exit 0 ;;
+            *) msg_error "Choix invalide. Entrez un nombre entre 1 et 4." ;;
+        esac
+    done
 }
 
 # ========================
