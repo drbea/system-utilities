@@ -1,0 +1,161 @@
+#!/bin/bash
+# commands/run_tests — Lancer les tests d'un projet
+# Usage: run_tests [options] [project_dir]
+
+set -euo pipefail
+
+# ========================
+#   Source des librairies
+# ========================
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/python.sh"
+
+# ========================
+#   Configuration
+# ========================
+VERBOSE_OUTPUT=false
+COVERAGE=false
+PATTERN=""
+
+# ========================
+#   Aide
+# ========================
+show_help() {
+    cat <<EOF
+Usage: run_tests [options] [project_dir]
+
+Lance les tests d'un projet Python/Django.
+
+Options:
+  --verbose-output     Affichage detaille des tests
+  --coverage           Generer un rapport de couverture
+  --pattern <glob>     Pattern de fichiers de tests
+  --verbose            Mode debug (affiche plus d'infos)
+  --version            Affiche la version
+  --help               Affiche cette aide
+EOF
+    exit 0
+}
+
+show_version() {
+    echo "run_tests $SYSTEM_UTILITIES_VERSION"
+    exit 0
+}
+
+# ========================
+#   Parse des options
+# ========================
+PROJECT_DIR=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --verbose-output) VERBOSE_OUTPUT=true; shift ;;
+        --coverage) COVERAGE=true; shift ;;
+        --pattern) PATTERN="$2"; shift 2 ;;
+        --verbose) VERBOSE=true; shift ;;
+        --version) show_version ;;
+        --help) show_help ;;
+        *) PROJECT_DIR="$1"; shift ;;
+    esac
+done
+
+# Dossier par defaut
+PROJECT_DIR="${PROJECT_DIR:-.}"
+
+if [[ ! -d "$PROJECT_DIR" ]]; then
+    msg_error "Le dossier $PROJECT_DIR n'existe pas."
+    exit 1
+fi
+
+cd "$PROJECT_DIR" || exit 1
+
+# ========================
+#   Detecter le framework
+# ========================
+FRAMEWORK="python"
+if [[ -f "manage.py" ]] || [[ -f "src/manage.py" ]]; then
+    FRAMEWORK="django"
+fi
+
+msg_info "Framework detecte : $FRAMEWORK"
+
+# ========================
+#   Detecter Python
+# ========================
+PYTHON_CMD="python3"
+if [[ -f ".venv/bin/python" ]]; then
+    PYTHON_CMD=".venv/bin/python"
+fi
+
+if ! command -v $PYTHON_CMD &>/dev/null; then
+    msg_error "Python non trouve."
+    exit 1
+fi
+
+msg_debug "Python : $($PYTHON_CMD --version)"
+
+# ========================
+#   Verifier les fichiers de tests
+# ========================
+TEST_DIR=""
+if [[ -d "tests" ]]; then
+    TEST_DIR="tests"
+elif [[ -d "test" ]]; then
+    TEST_DIR="test"
+fi
+
+if [[ -z "$TEST_DIR" ]]; then
+    msg_warn "Aucun dossier de tests trouve (tests/ ou test/)."
+    exit 0
+fi
+
+msg_info "Dossier de tests : $TEST_DIR"
+
+# ========================
+#   Lancer les tests
+# ========================
+msg_progress "Lancement des tests..."
+
+TEST_ARGS=""
+if $VERBOSE_OUTPUT; then
+    TEST_ARGS="-v"
+fi
+
+if [[ -n "$PATTERN" ]]; then
+    TEST_ARGS="$TEST_ARGS -p $PATTERN"
+fi
+
+# Essayer pytest d'abord, puis unittest
+EXIT_CODE=0
+if $PYTHON_CMD -m pytest --version &>/dev/null 2>&1; then
+    msg_info "Utilisation de pytest"
+    if $COVERAGE; then
+        $PYTHON_CMD -m pytest $TEST_DIR $TEST_ARGS --cov=src --cov-report=term-missing || EXIT_CODE=$?
+    else
+        $PYTHON_CMD -m pytest $TEST_DIR $TEST_ARGS || EXIT_CODE=$?
+    fi
+else
+    msg_info "Utilisation de unittest"
+    $PYTHON_CMD -m unittest discover $TEST_DIR $TEST_ARGS || EXIT_CODE=$?
+fi
+
+# ========================
+#   Resume
+# ========================
+echo
+if [[ $EXIT_CODE -eq 0 ]]; then
+    msg_success "Tous les tests sont passes."
+else
+    msg_error "Certains tests ont echoue (code: $EXIT_CODE)."
+fi
+
+exit $EXIT_CODE
