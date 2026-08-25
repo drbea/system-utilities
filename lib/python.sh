@@ -212,7 +212,7 @@ validate_venv() {
 # Usage: split_django_settings /path/to/project
 split_django_settings() {
     local project_dir="${1:-.}"
-    local settings_dir="$project_dir/src/config"
+    local settings_dir="$project_dir/src/core"
     local settings_file="$settings_dir/settings.py"
 
     if [[ ! -f "$settings_file" ]]; then

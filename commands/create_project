@@ -132,7 +132,7 @@ if $CREATE_DJANGO; then
     if $CREATE_VENV; then
         "$PROJECT_DIR/$VENV_NAME/bin/pip" install django python-dotenv dj-database-url django-debug-toolbar --quiet
     fi
-    django-admin startproject config src/
+    django-admin startproject core src/
     
     # Split des settings Django (base.py, dev.py, prod.py)
     split_django_settings "$PROJECT_DIR"
