@@ -359,7 +359,7 @@ uninstall() {
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --install-dir) INSTALL_DIR="$2"; shift 2 ;;
-        --force) FORCE_INSTALL=true; shift ;;
+        --force) FORCE_INSTALL=true; INTERACTIVE=false; shift ;;
         --no-path) ADD_TO_PATH=false; shift ;;
         --uninstall) uninstall; exit 0 ;;
         --help) show_help ;;
