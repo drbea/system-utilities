@@ -124,7 +124,7 @@ fi
 if $CREATE_DJANGO; then
     mkdir -p src
     if $CREATE_VENV; then
-        "$PROJECT_DIR/$VENV_NAME/bin/pip" install django python-dotenv dj-database-url --quiet
+        "$PROJECT_DIR/$VENV_NAME/bin/pip" install django python-dotenv dj-database-url django-debug-toolbar --quiet
     fi
     django-admin startproject config src/
     
@@ -177,6 +177,7 @@ if $CREATE_DJANGO; then
 Django>=5,<6
 python-dotenv
 dj-database-url
+django-debug-toolbar>=4.0.0
 EOF
 elif $CREATE_FASTAPI; then
     cat <<EOF > "$PROJECT_DIR/requirements.txt"
