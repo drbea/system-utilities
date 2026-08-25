@@ -57,7 +57,11 @@ require_commands() {
 
 # Obtenir l'IP LAN de la machine
 get_lan_ip() {
-    ip route get 8.8.8.8 2>/dev/null | awk '{print $7; exit}'
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        ifconfig | awk '/inet / && !/127.0.0.1/{print $2}' | head -1
+    else
+        ip route get 8.8.8.8 2>/dev/null | awk '{print $7; exit}'
+    fi
 }
 
 # Vérifier qu'un port est disponible
