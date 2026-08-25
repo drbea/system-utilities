@@ -338,6 +338,18 @@ uninstall() {
         sed -i "\|export PATH.*$SYSTEM_UTILS_DIR|d" "$shell_rc" 2>/dev/null || true
     fi
 
+    # Supprimer les completions
+    local completion_files=(
+        "$HOME/.local/share/bash-completion/completions/system-utilities.bash"
+        "/etc/bash_completion.d/system-utilities.bash"
+    )
+    for cf in "${completion_files[@]}"; do
+        if [[ -f "$cf" ]]; then
+            rm -f "$cf"
+            msg_success "Completions supprimees : $cf"
+        fi
+    done
+
     msg_success "Desinstallation terminee."
 }
 

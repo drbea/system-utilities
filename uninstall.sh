@@ -135,6 +135,18 @@ uninstall() {
         msg_success "PATH nettoye."
     fi
 
+    # Supprimer les completions
+    local completion_files=(
+        "$HOME/.local/share/bash-completion/completions/system-utilities.bash"
+        "/etc/bash_completion.d/system-utilities.bash"
+    )
+    for cf in "${completion_files[@]}"; do
+        if [[ -f "$cf" ]]; then
+            rm -f "$cf"
+            msg_success "Completions supprimees : $cf"
+        fi
+    done
+
     echo
     msg_success "Desinstallation terminee."
     msg_info "Redemarrez votre terminal pour appliquer les changements."
