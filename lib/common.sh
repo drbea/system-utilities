@@ -300,3 +300,66 @@ EOF
         msg_success "Licence $license_type generee."
     fi
 }
+
+# ========================
+#   Configuration
+# ========================
+CONFIG_DIR="$HOME/.system-utilities"
+CONFIG_FILE="$CONFIG_DIR/config"
+
+# Valeurs par defaut
+CONFIG_DEFAULT_AUTHOR=""
+CONFIG_DEFAULT_DB="sqlite"
+CONFIG_DEFAULT_VENV_NAME=".venv"
+CONFIG_DEFAULT_LICENSE="none"
+
+# Charger la configuration
+load_config() {
+    if [[ -f "$CONFIG_FILE" ]]; then
+        while IFS='=' read -r key value; do
+            # Ignorer les commentaires et lignes vides
+            [[ "$key" =~ ^#.*$ ]] && continue
+            [[ -z "$key" ]] && continue
+            
+            case "$key" in
+                AUTHOR) CONFIG_DEFAULT_AUTHOR="$value" ;;
+                DB) CONFIG_DEFAULT_DB="$value" ;;
+                VENV_NAME) CONFIG_DEFAULT_VENV_NAME="$value" ;;
+                LICENSE) CONFIG_DEFAULT_LICENSE="$value" ;;
+            esac
+        done < "$CONFIG_FILE"
+    fi
+}
+
+# Sauvegarder la configuration
+save_config() {
+    mkdir -p "$CONFIG_DIR"
+    cat <<EOF > "$CONFIG_FILE"
+# Configuration system-utilities
+# Modifier ces valeurs pour changer les comportements par defaut
+
+# Auteur par defaut pour les projets
+AUTHOR=$CONFIG_DEFAULT_AUTHOR
+
+# Base de donnees par defaut : sqlite, postgres, mysql
+DB=$CONFIG_DEFAULT_DB
+
+# Nom de l'environnement virtuel
+VENV_NAME=$CONFIG_DEFAULT_VENV_NAME
+
+# Licence par defaut : mit, gpl, apache, none
+LICENSE=$CONFIG_DEFAULT_LICENSE
+EOF
+    msg_success "Configuration sauvegardee : $CONFIG_FILE"
+}
+
+# Afficher la configuration
+show_config() {
+    load_config
+    echo "Configuration actuelle :"
+    echo "  Auteur     : ${CONFIG_DEFAULT_AUTHOR:-(non defini)}"
+    echo "  BDD        : $CONFIG_DEFAULT_DB"
+    echo "  Venv       : $CONFIG_DEFAULT_VENV_NAME"
+    echo "  Licence    : $CONFIG_DEFAULT_LICENSE"
+    echo "  Fichier    : $CONFIG_FILE"
+}
