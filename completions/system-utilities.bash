@@ -194,6 +194,21 @@ _complete_run_tests() {
 }
 
 # ========================
+#   Completions yt_download
+# ========================
+_complete_yt_download() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    # Options disponibles
+    opts="--help --version"
+
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    return 0
+}
+
+# ========================
 #   Enregistrement des completions
 # ========================
 complete -F _complete_create_project create_project
@@ -203,3 +218,4 @@ complete -F _complete_backup_db backup_db
 complete -F _complete_check_project check_project
 complete -F _complete_migrate_project migrate_project
 complete -F _complete_run_tests run_tests
+complete -F _complete_yt_download yt_download

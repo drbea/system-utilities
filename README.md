@@ -23,6 +23,7 @@ Redemarrez votre terminal apres l'installation.
 | `check_project` | Verifier un projet (lint, tests, securite) |
 | `migrate_project` | Gerer les migrations Django |
 | `run_tests` | Lancer les tests d'un projet |
+| `yt_download` | Telecharger cours videos, playlists et livres audio |
 
 ---
 
@@ -328,6 +329,86 @@ Utiliser system-utilities dans un conteneur :
 docker build -t system-utilities .
 docker run -it system-utilities
 ```
+
+---
+
+## yt_download
+
+Telecharger des cours (videos, playlists) ou des livres audio avec `yt-dlp` et `ffmpeg`.
+
+### Dependances
+
+- `yt-dlp`
+- `ffmpeg`
+
+Le script verifie leur presence au demarrage et s'arrete si l'un des deux est manquant :
+
+```bash
+sudo dnf install yt-dlp ffmpeg   # Fedora
+sudo apt install yt-dlp ffmpeg   # Debian/Ubuntu
+```
+
+### Utilisation
+
+```bash
+yt_download
+```
+
+Flux interactif :
+
+1. Coller l'URL du media (video, playlist ou livre audio).
+2. Choisir le dossier cible (defaut : `~/Videos`, modifiable dans la configuration).
+3. Choisir le format :
+   - **1** : Video (meilleure qualite par defaut)
+   - **2** : Video (choisir une qualite specifique via `yt-dlp -F`)
+   - **3** : Audio uniquement (extraction MP3, qualite maximale)
+4. Choisir d'executer en arriere-plan pour suivre la progression.
+
+### Menu principal
+
+1. **Nouveau telechargement**
+2. **Reprendre** un telechargement inacheve (en cours / echoue)
+3. **Suivre les telechargements en cours** (rafraichissement toutes les 2 s, `#` pour annuler proprement, `Q` pour quitter)
+4. **Configuration** (preferences persistantes)
+5. **Historique** complet
+6. **Quitter**
+
+### Suivi de progression
+
+- Chaque telechargement lance en arriere-plan est journalise (`~/.local/share/yt_download/<n>.log`) avec son PID et son code de sortie.
+- Vitesse, ETA et avancement sont affiches en direct. A la fin, une notification (`notify-send` ou son) signale le resultat.
+- On peut lancer plusieurs telechargements simultanement et les suivre dans une meme vue.
+
+### Preferences (~/.config/yt_download/config)
+
+| Option | Description |
+|--------|-------------|
+| `DEFAULT_DIR` | Dossier de telechargement par defaut (`~/Videos`) |
+| `DEFAULT_FORMAT` | Format du menu applique par defaut (1, 2 ou 3) |
+| `RATE_LIMIT` | Limite de debit (`--limit-rate`, ex : `2M`, `500K`) |
+| `USE_ARCHIVE` | Archive anti re-telechargement (`--download-archive`, dans `~/.local/share/yt_download/downloaded.txt`) |
+| `SUBTITLES` / `SUBTITLE_LANGS` | Sous-titres pour les cours (`--write-subs --embed-subs`, langues ex : `fr,en`) |
+| `CHAPTERS` | Chapitres integres (`--embed-chapters`, formats video) |
+| `NOTIFY_END` | Notifier en fin de telechargement |
+| `COOKIES_FILE` | Fichier cookies pour les contenus restreints (`--cookies`) |
+
+### Playlists et conflits
+
+- Les playlists sont rangees dans un sous-dossier au nom de la playlist, les fichiers gardent leur nom d'origine.
+- En cas de fichier deja present, le script propose 3 solutions : ecraser, ignorer les fichiers existants, ou renommer avec un numero.
+
+### Historique et reprise
+
+- Chaque telechargement est journalise dans `~/.local/share/yt_download/history` (statut `en_cours`, `echoue` ou `termine`).
+- Le menu permet de lister tous les telechargements et de reprendre ceux inacheves (en cours ou echoues) avec reprise des fichiers partiels.
+- Les telechargements encore actifs en arriere-plan sont automatiquement exclus du menu de reprise pour eviter les doublons.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--help` | Afficher l'aide |
+| `--version` | Afficher la version |
 
 ---
 

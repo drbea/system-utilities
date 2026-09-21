@@ -1,0 +1,26 @@
+Agis en tant qu'expert en scripting Bash sous Linux (Fedora). Je veux que tu me génères un script Bash interactif et robuste pour télécharger des cours (vidéos, playlists) ou des livres audio. 
+
+Voici le cahier des charges strict et le flux d'utilisation à implémenter :
+
+1. VÉRIFICATION STRICTE DES DÉPENDANCES
+- Au tout début, le script doit vérifier si 'yt-dlp' ET 'ffmpeg' sont installés sur le système (en utilisant 'command -v').
+- Si l'un des deux (ou les deux) est manquant, le script doit stopper immédiatement et afficher un message d'erreur très clair en rouge :
+  "Erreur : [Nom de l'outil] est manquant. Veuillez l'installer avant de relancer le script (Exemple sous Fedora : sudo dnf install yt-dlp ffmpeg)."
+
+2. FLUX D'UTILISATION (ÉTAPE PAR ÉTAPE)
+- Étape 1 : Demander à l'utilisateur de coller l'URL du média (vidéo, playlist ou audio). Valider que l'URL n'est pas vide.
+- Étape 2 : Proposer le dossier cible. Le script doit afficher : "Les fichiers seront enregistrés dans : $HOME/Vidéos. Appuyez sur ENTRÉE pour valider ou tapez un autre chemin : ". Si l'utilisateur tape un chemin personnalisé, le script doit créer le dossier s'il n'existe pas.
+- Étape 3 : Demander le format souhaité via un menu :
+  1) Vidéo (Meilleure qualité par défaut)
+  2) Vidéo (Choisir une qualité spécifique)
+  3) Audio uniquement (Extraction en MP3)
+
+3. LOGIQUE DE TÉLÉCHARGEMENT (CAS PAR CAS)
+- Si le lien est une PLAYLIST : Le script doit impérativement créer un sous-dossier portant le nom de la playlist (utiliser le template yt-dlp pour récupérer automatiquement le nom de la playlist). À l'intérieur de ce dossier, les fichiers doivent CONSERVER leur nom d'origine exact sur internet (aucune numérotation ajoutée par le script).
+- Si le choix 2 (Qualité vidéo spécifique) est sélectionné : Utiliser 'yt-dlp -F' pour lister les formats disponibles, puis demander à l'utilisateur de saisir le code du format souhaité.
+- Si le choix 3 (Audio) est sélectionné : Extraire l'audio et le convertir en MP3 avec une excellente qualité.
+
+4. QUALITÉ DU CODE
+- Le script doit être propre, commenté en français, et gérer parfaitement les espaces dans les noms de dossiers ou de fichiers (utiliser des guillemets partout où c'est nécessaire).
+- Inclure des messages clairs et colorés dans le terminal pour guider l'utilisateur à chaque étape.
+

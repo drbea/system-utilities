@@ -223,7 +223,9 @@ install() {
     # Copier les fichiers
     msg_progress "Copie des fichiers..."
     cp -r "$SCRIPT_DIR/lib/"* "$SYSTEM_UTILS_DIR/lib/"
-    cp -r "$SCRIPT_DIR/commands/"* "$SYSTEM_UTILS_DIR/commands/"
+    # -L : dereference les liens symboliques (ex: commands/yt_download)
+    # pour copier le fichier reel et non le lien
+    cp -rL "$SCRIPT_DIR/commands/"* "$SYSTEM_UTILS_DIR/commands/"
     cp -r "$SCRIPT_DIR/completions/"* "$SYSTEM_UTILS_DIR/completions/" 2>/dev/null || true
 
     # Rendre les commandes executables
@@ -288,7 +290,7 @@ verify_install() {
     echo
     msg_progress "Verification de l'installation..."
 
-    for cmd in create_project django_collab deploy_project backup_db check_project; do
+    for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests yt_download; do
         if [[ -x "$install_dir/$cmd" ]]; then
             msg_success "$cmd installe"
         else
@@ -307,6 +309,9 @@ verify_install() {
         echo "  deploy_project   — Deploier un projet"
         echo "  backup_db        — Sauvegarder une base de donnees"
         echo "  check_project    — Verifier un projet"
+        echo "  migrate_project  — Gerer les migrations Django"
+        echo "  run_tests        — Lancer les tests d'un projet"
+        echo "  yt_download      — Telecharger cours, playlists et livres audio"
         echo
         msg_info "Redemarrez votre terminal ou executez :"
         echo "  source $(detect_shell_rc)"
@@ -332,7 +337,7 @@ uninstall() {
     local install_dir
     install_dir=$(detect_install_dir)
 
-    for cmd in create_project django_collab deploy_project backup_db check_project; do
+    for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests yt_download; do
         if [[ -L "$install_dir/$cmd" ]]; then
             rm -f "$install_dir/$cmd"
             msg_success "Lien $cmd supprime."

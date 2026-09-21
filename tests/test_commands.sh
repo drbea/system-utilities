@@ -39,7 +39,7 @@ echo
 
 # Test 1: Toutes les commandes existent
 echo "--- Verification des fichiers ---"
-for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests; do
+for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests yt_download; do
     if [[ -x "$COMMANDS_DIR/$cmd" ]]; then
         test_pass "$cmd existe et est executable"
     else
@@ -61,7 +61,7 @@ done
 # Test 3: Les commandes ont --help
 echo
 echo "--- Tests --help ---"
-for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests; do
+for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests yt_download; do
     OUTPUT=$("$COMMANDS_DIR/$cmd" --help 2>&1 || true)
     if echo "$OUTPUT" | grep -q "Usage:"; then
         test_pass "$cmd --help affiche l'aide"
@@ -73,7 +73,7 @@ done
 # Test 4: Les commandes ont --version
 echo
 echo "--- Tests --version ---"
-for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests; do
+for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests yt_download; do
     OUTPUT=$("$COMMANDS_DIR/$cmd" --version 2>&1 || true)
     if echo "$OUTPUT" | grep -q "[0-9]\.[0-9]\.[0-9]"; then
         test_pass "$cmd --version affiche la version"
@@ -85,7 +85,7 @@ done
 # Test 5: Syntaxe bash valide
 echo
 echo "--- Verification syntaxe ---"
-for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests; do
+for cmd in create_project django_collab deploy_project backup_db check_project migrate_project run_tests yt_download; do
     if bash -n "$COMMANDS_DIR/$cmd" 2>/dev/null; then
         test_pass "$cmd a une syntaxe valide"
     else

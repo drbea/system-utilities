@@ -1,0 +1,870 @@
+#!/bin/bash
+# cmd_download/yt_download — Télécharger des cours (vidéos, playlists) ou des livres audio
+# Dépendances : yt-dlp et ffmpeg (vérifiées au démarrage)
+# Usage: yt_download [--help] [--version]
+
+set -euo pipefail
+
+VERSION="1.1.0"
+
+# ========================
+#   Couleurs et messages
+# ========================
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+msg_success()  { echo -e "${GREEN}${BOLD}[OK]${NC} $*"; }
+msg_error()    { echo -e "${RED}${BOLD}[ERREUR]${NC} $*" >&2; }
+msg_warn()     { echo -e "${YELLOW}${BOLD}[ATTENTION]${NC} $*"; }
+msg_info()     { echo -e "${BLUE}${BOLD}[INFO]${NC} $*"; }
+msg_progress() { echo -e "${CYAN}${BOLD}[...]${NC} $*"; }
+msg_question() { echo -en "${BOLD}[?]${NC} $*"; }
+
+# ========================
+#   Historique des téléchargements
+#   Le fichier 'history' stocke des lignes au format :
+#   date<TAB>statut<TAB>url<TAB>choix_format<TAB>code_format<TAB>dossier<TAB>template
+#   statut = en_cours | echoue | termine
+# ========================
+HISTORY_DIR="$HOME/.local/share/yt_download"
+HISTORY_FILE="$HISTORY_DIR/history"
+TAB=$'\t'
+
+# Ajouter une entrée et imprimer son numéro de ligne
+# Usage: history_add statut url choix_format code_format dossier template
+history_add() {
+    local statut="$1" url="$2" choix="$3" code="$4" dossier="$5" template="$6"
+    local ligne=0
+    mkdir -p "$HISTORY_DIR"
+    if [[ -f "$HISTORY_FILE" ]]; then
+        ligne="$(wc -l < "$HISTORY_FILE")"
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$(date +'%Y-%m-%d %H:%M:%S')" "$statut" "$url" "$choix" "$code" "$dossier" "$template" \
+        >> "$HISTORY_FILE"
+    ligne=$((ligne + 1))
+    echo "$ligne"
+}
+
+# Lire la ligne numero N de l'historique
+# Usage: history_get_line N
+history_get_line() {
+    local cible="$1" i=0 line=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        i=$((i + 1))
+        if [[ "$i" -eq "$cible" ]]; then
+            printf '%s' "$line"
+            return 0
+        fi
+    done < "$HISTORY_FILE"
+    return 1
+}
+
+# Mettre a jour le statut d'une entree
+# Usage: history_set_status N statut
+history_set_status() {
+    local cible="$1" nouveau="$2" tmp i=0 line=""
+    tmp="$(mktemp)"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        i=$((i + 1))
+        if [[ "$i" -eq "$cible" ]]; then
+            IFS="$TAB" read -ra F <<< "$line"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "${F[0]}" "$nouveau" "${F[2]:-}" "${F[3]:-}" "${F[4]:-}" "${F[5]:-}" "${F[6]:-}" >> "$tmp"
+        else
+            printf '%s\n' "$line" >> "$tmp"
+        fi
+    done < "$HISTORY_FILE"
+    mv "$tmp" "$HISTORY_FILE"
+}
+
+# Libelle du format choisit
+# Usage: format_label choix code
+format_label() {
+    local choix="$1" code="$2"
+    case "$choix" in
+        1) echo "Vidéo HD (meilleure qualité)" ;;
+        2)
+            if [[ -n "$code" && "$code" != "-" ]]; then
+                echo "Vidéo (formats $code)"
+            else
+                echo "Vidéo (qualité choisie)"
+            fi
+            ;;
+        3) echo "Audio MP3" ;;
+        *) echo "—" ;;
+    esac
+}
+
+# Lister tous les telechargements connus (avec leur statut)
+history_list() {
+    local i=0 line=""
+    if [[ ! -f "$HISTORY_FILE" ]] || [[ ! -s "$HISTORY_FILE" ]]; then
+        msg_warn "Aucun historique de téléchargement."
+        return 1
+    fi
+    echo
+    printf '%-4s %-10s %-19s %-26s %s\n' "#" "Statut" "Date" "Format" "Dossier cible"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        i=$((i + 1))
+        IFS="$TAB" read -ra F <<< "$line"
+        local edition="${F[0]}" statut="${F[1]}"
+        local format
+        format="$(format_label "${F[3]:-}" "${F[4]:-}")"
+        case "$statut" in
+            en_cours)
+                echo -e "${YELLOW}$(printf '%-4d %-10s %-19s %-26s %s' "$i" "$statut" "$edition" "$format" "${F[5]:-}")${NC}"
+                ;;
+            echoue)
+                echo -e "${RED}$(printf '%-4d %-10s %-19s %-26s %s' "$i" "$statut" "$edition" "$format" "${F[5]:-}")${NC}"
+                ;;
+            *)
+                printf '%-4d %-10s %-19s %-26s %s\n' "$i" "$statut" "$edition" "$format" "${F[5]:-}"
+                ;;
+        esac
+    done < "$HISTORY_FILE"
+}
+
+# ========================
+#   Configuration / préférences (~/.config)
+#   Fichier : $CONFIG_FILE
+# ========================
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/yt_download"
+CONFIG_FILE="$CONFIG_DIR/config"
+ARCHIVE_FILE="$HISTORY_DIR/downloaded.txt"
+
+# Valeurs par défaut
+CONFIG_DEFAULT_DIR="$HOME/Videos"
+CONFIG_DEFAULT_FORMAT="3"
+CONFIG_RATE_LIMIT=""
+CONFIG_USE_ARCHIVE="true"
+CONFIG_SUBTITLES="false"
+CONFIG_SUBTITLE_LANGS="fr,en"
+CONFIG_CHAPTERS="false"
+CONFIG_NOTIFY_END="true"
+CONFIG_COOKIES_FILE=""
+
+load_config() {
+    [[ -f "$CONFIG_FILE" ]] || return 0
+    local key="" value=""
+    while IFS='=' read -r key value; do
+        [[ "$key" =~ ^#.*$ ]] && continue
+        [[ -z "$key" ]] && continue
+        case "$key" in
+            DEFAULT_DIR)    CONFIG_DEFAULT_DIR="${value/#\~/$HOME}" ;;
+            DEFAULT_FORMAT) CONFIG_DEFAULT_FORMAT="$value" ;;
+            RATE_LIMIT)     CONFIG_RATE_LIMIT="$value" ;;
+            USE_ARCHIVE)    CONFIG_USE_ARCHIVE="$value" ;;
+            SUBTITLES)      CONFIG_SUBTITLES="$value" ;;
+            SUBTITLE_LANGS) CONFIG_SUBTITLE_LANGS="$value" ;;
+            CHAPTERS)       CONFIG_CHAPTERS="$value" ;;
+            NOTIFY_END)     CONFIG_NOTIFY_END="$value" ;;
+            COOKIES_FILE)   CONFIG_COOKIES_FILE="${value/#\~/$HOME}" ;;
+        esac
+    done < "$CONFIG_FILE"
+}
+
+save_config() {
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_FILE" <<EOF
+# Configuration yt_download
+DEFAULT_DIR=$CONFIG_DEFAULT_DIR
+DEFAULT_FORMAT=$CONFIG_DEFAULT_FORMAT
+RATE_LIMIT=$CONFIG_RATE_LIMIT
+USE_ARCHIVE=$CONFIG_USE_ARCHIVE
+SUBTITLES=$CONFIG_SUBTITLES
+SUBTITLE_LANGS=$CONFIG_SUBTITLE_LANGS
+CHAPTERS=$CONFIG_CHAPTERS
+NOTIFY_END=$CONFIG_NOTIFY_END
+COOKIES_FILE=$CONFIG_COOKIES_FILE
+EOF
+    msg_success "Configuration sauvegardée : $CONFIG_FILE"
+}
+
+toggle_yes_no() {
+    [[ "$1" == "true" ]] && echo "false" || echo "true"
+}
+
+config_menu() {
+    local choix_cfg="" valeur=""
+    while true; do
+        echo
+        msg_info "Configuration actuelle :"
+        echo "   1) Dossier par défaut         : $CONFIG_DEFAULT_DIR"
+        echo "   2) Format par défaut          : $(format_label "$CONFIG_DEFAULT_FORMAT" "-")"
+        echo "   3) Limite de débit (--limit)  : ${CONFIG_RATE_LIMIT:-(aucune)}"
+        echo "   4) Archive anti-re-télécharg. : $CONFIG_USE_ARCHIVE"
+        echo "   5) Sous-titres des cours      : $CONFIG_SUBTITLES (langues : $CONFIG_SUBTITLE_LANGS)"
+        echo "   6) Chapitres                  : $CONFIG_CHAPTERS"
+        echo "   7) Notification de fin        : $CONFIG_NOTIFY_END"
+        echo "   8) Fichier cookies            : ${CONFIG_COOKIES_FILE:-(aucun)}"
+        echo "   9) Sauvegarder et retour"
+        echo
+        msg_question "Votre choix [1-9] : "
+        read -r choix_cfg || exit 0
+        case "$choix_cfg" in
+            1)
+                msg_question "Nouveau dossier par défaut [$CONFIG_DEFAULT_DIR] : "
+                read -r valeur || true
+                if [[ -n "$valeur" ]]; then
+                    valeur="${valeur/#\~/$HOME}"
+                    mkdir -p "$valeur" 2>/dev/null || true
+                    CONFIG_DEFAULT_DIR="$valeur"
+                fi
+                ;;
+            2)
+                msg_question "Format par défaut (1 Vidéo HD / 2 Qualité / 3 Audio MP3) : "
+                read -r valeur || true
+                case "$valeur" in
+                    1|2|3) CONFIG_DEFAULT_FORMAT="$valeur" ;;
+                    *) msg_warn "Format ignoré (valeurs acceptées : 1, 2 ou 3)." ;;
+                esac
+                ;;
+            3)
+                msg_question "Limite de débit (ex : 2M, 500K) — vide pour illimité : "
+                read -r valeur || true
+                CONFIG_RATE_LIMIT="$valeur"
+                ;;
+            4) CONFIG_USE_ARCHIVE="$(toggle_yes_no "$CONFIG_USE_ARCHIVE")" ;;
+            5)
+                msg_question "Activer les sous-titres ? [o/N] : "
+                read -r valeur || true
+                [[ "$valeur" =~ ^[OoYy]$ ]] && CONFIG_SUBTITLES="true" || CONFIG_SUBTITLES="false"
+                if [[ "$CONFIG_SUBTITLES" == "true" ]]; then
+                    msg_question "Langues des sous-titres (ex : fr,en) [$CONFIG_SUBTITLE_LANGS] : "
+                    read -r valeur || true
+                    [[ -n "$valeur" ]] && CONFIG_SUBTITLE_LANGS="$valeur"
+                fi
+                ;;
+            6) CONFIG_CHAPTERS="$(toggle_yes_no "$CONFIG_CHAPTERS")" ;;
+            7) CONFIG_NOTIFY_END="$(toggle_yes_no "$CONFIG_NOTIFY_END")" ;;
+            8)
+                msg_question "Fichier cookies (txt) — vide pour aucun : "
+                read -r valeur || true
+                CONFIG_COOKIES_FILE=""
+                if [[ -n "$valeur" ]]; then
+                    CONFIG_COOKIES_FILE="${valeur/#\~/$HOME}"
+                    [[ -f "$CONFIG_COOKIES_FILE" ]] || msg_warn "Fichier cookies introuvable : $CONFIG_COOKIES_FILE"
+                fi
+                ;;
+            9) save_config; return 0 ;;
+            *) msg_warn "Choix invalide. Entrez un chiffre entre 1 et 9." ;;
+        esac
+    done
+}
+
+# ========================
+#   Vérification stricte des dépendances
+#   yt-dlp ET ffmpeg doivent etre installés avant toute operation
+# ========================
+check_dependencies() {
+    local manquant=0 outil=""
+    for outil in yt-dlp ffmpeg; do
+        if ! command -v "$outil" &>/dev/null; then
+            echo -e "${RED}Erreur : ${outil} est manquant. Veuillez l'installer avant de relancer le script (Exemple sous Fedora : sudo dnf install yt-dlp ffmpeg).${NC}" >&2
+            manquant=1
+        fi
+    done
+    return "$manquant"
+}
+
+# ========================
+#   Aide
+# ========================
+show_help() {
+    cat <<EOF
+Usage: yt_download [options]
+
+Télécharge des cours (vidéos, playlists) ou des livres audio
+via yt-dlp et ffmpeg, avec :
+  - historique et reprise des téléchargements inachevés
+  - suivi de progression (vue live toutes les 2 s)
+  - annulation propre d'un téléchargement en cours
+  - notification de fin, limite de débit, archive anti re-téléchargement
+  - sous-titres et chapitres pour les cours
+  - préférences persistantes (~/.config/yt_download/config)
+  - cookies pour les contenus privés / restreints
+
+Options:
+  --help              Affiche cette aide
+  --version           Affiche la version
+EOF
+    exit 0
+}
+
+# ========================
+#   Version
+# ========================
+show_version() {
+    echo "yt_download $VERSION"
+    exit 0
+}
+
+# ========================
+#   Étape 1 — Saisie de l'URL
+# ========================
+read_url() {
+    URL=""
+    while [[ -z "$URL" ]]; do
+        msg_question "Collez l'URL du média (vidéo, playlist ou livre audio) : "
+        if ! read -r URL; then
+            msg_warn "Saisie interrompue."
+            return 1
+        fi
+        # Supprimer les espaces éventuels autour de l'URL
+        URL="${URL//[[:space:]]/}"
+        [[ -n "$URL" ]] || msg_warn "L'URL est vide. Veuillez coller une URL valide."
+    done
+}
+
+# ========================
+#   Étape 2 — Dossier cible
+# ========================
+select_target_dir() {
+    local defaut="$CONFIG_DEFAULT_DIR"
+    echo -e "${BLUE}${BOLD}[INFO]${NC} Les fichiers seront enregistrés dans : ${BOLD}$defaut${NC}. Appuyez sur ENTRÉE pour valider ou tapez un autre chemin : "
+    read -r TARGET_DIR || true
+    TARGET_DIR="${TARGET_DIR:-$defaut}"
+    # Gérer les chemins commencant par ~
+    TARGET_DIR="${TARGET_DIR/#\~/$HOME}"
+    TARGET_DIR="${TARGET_DIR%/}"
+    [[ -n "$TARGET_DIR" ]] || TARGET_DIR="$defaut"
+    if ! mkdir -p "$TARGET_DIR"; then
+        msg_error "Impossible de créer le dossier : $TARGET_DIR"
+        exit 1
+    fi
+    msg_success "Dossier cible : $TARGET_DIR"
+}
+
+# ========================
+#   Étape 3 — Choix du format
+# ========================
+select_format() {
+    local choix=""
+    echo
+    msg_info "Veuillez choisir le format souhaité :"
+    echo "  1) Vidéo (Meilleure qualité par défaut)"
+    echo "  2) Vidéo (Choisir une qualité spécifique)"
+    echo "  3) Audio uniquement (Extraction en MP3)"
+    echo
+    while [[ -z "$choix" ]]; do
+        msg_question "Votre choix [1-3] (ENTRÉE = défaut : $(format_label "$CONFIG_DEFAULT_FORMAT" "-")) : "
+        read -r choix || true
+        if [[ -z "$choix" ]]; then
+            choix="$CONFIG_DEFAULT_FORMAT"
+        fi
+        case "$choix" in
+            1|2|3) FORMAT_CHOICE="$choix" ;;
+            *)
+                msg_warn "Choix invalide. Entrez 1, 2 ou 3."
+                choix=""
+                ;;
+        esac
+    done
+
+    FORMAT_CODE="-"
+    if [[ "$FORMAT_CHOICE" == "2" ]]; then
+        msg_progress "Récupération de la liste des formats disponibles (yt-dlp -F)..."
+        if ! yt-dlp -F "$URL"; then
+            msg_warn "Impossible de lister les formats (URL invalide ou connexion ?). Vous pouvez saisir un code manuellement."
+        fi
+        while true; do
+            msg_question "Saisissez le code du format souhaité (exemple : 137+140) : "
+            read -r FORMAT_CODE || true
+            [[ -n "$FORMAT_CODE" ]] && break
+            msg_warn "Le code ne doit pas être vide."
+        done
+    fi
+}
+
+# ========================
+#   Détection playlist
+#   Une playlist est detectée par la presence de list=/set= ou /playlist(s)//set(s)/
+# ========================
+is_playlist_url() {
+    local pattern_query='[?&][^=]*(list|set)='
+    local pattern_path='/(playlist|set)s?/'
+    [[ "$URL" =~ $pattern_query ]] || [[ "$URL" =~ $pattern_path ]]
+}
+
+detect_playlist() {
+    if is_playlist_url; then
+        IS_PLAYLIST="true"
+        # Sous-dossier au nom de la playlist, fichiers gardant leur nom d'origine (sans numérotation)
+        OUTPUT_TEMPLATE="%(playlist_title)s/%(title)s.%(ext)s"
+        msg_info "Playlist détectée : les fichiers seront rangés dans un sous-dossier au nom de la playlist."
+    else
+        IS_PLAYLIST="false"
+        OUTPUT_TEMPLATE="%(title)s.%(ext)s"
+        msg_info "Média isolé : le fichier gardera son nom d'origine."
+    fi
+}
+
+# ========================
+#   Arguments yt-dlp selon le format choisi
+# ========================
+build_format_args() {
+    YTDLP_ARGS=()
+    case "$FORMAT_CHOICE" in
+        1) YTDLP_ARGS+=(-f "bv*+ba/b" --merge-output-format mp4) ;;
+        2) YTDLP_ARGS+=(-f "$FORMAT_CODE" --merge-output-format mp4) ;;
+        3) YTDLP_ARGS+=(-x --audio-format mp3 --audio-quality 0 --embed-metadata) ;;
+    esac
+
+    # Options globales issues des préférences
+    if [[ -n "$CONFIG_RATE_LIMIT" ]]; then
+        YTDLP_ARGS+=(--limit-rate "$CONFIG_RATE_LIMIT")
+    fi
+    if [[ "$CONFIG_USE_ARCHIVE" == "true" ]]; then
+        YTDLP_ARGS+=(--download-archive "$ARCHIVE_FILE")
+    fi
+    if [[ -n "$CONFIG_COOKIES_FILE" ]] && [[ -f "$CONFIG_COOKIES_FILE" ]]; then
+        YTDLP_ARGS+=(--cookies "$CONFIG_COOKIES_FILE")
+    fi
+    # Sous-titres et chapitres uniquement pour les formats vidéo (pas MP3)
+    if [[ "$FORMAT_CHOICE" != "3" ]]; then
+        if [[ "$CONFIG_SUBTITLES" == "true" ]]; then
+            YTDLP_ARGS+=(--write-subs --embed-subs --sub-langs "$CONFIG_SUBTITLE_LANGS")
+        fi
+        if [[ "$CONFIG_CHAPTERS" == "true" ]]; then
+            YTDLP_ARGS+=(--embed-chapters)
+        fi
+    fi
+}
+
+# Extension finale réellement écrite (fusion vidéo ou conversion MP3)
+expected_extension() {
+    [[ "$FORMAT_CHOICE" == "3" ]] && echo "mp3" || echo "mp4"
+}
+
+# Template avec numérotation, utilisée quand l'utilisateur veut éviter d'écraser
+numbered_template() {
+    if [[ "$IS_PLAYLIST" == "true" ]]; then
+        echo "%(playlist_title)s/%(playlist_index)03d - %(title)s.%(ext)s"
+    else
+        echo "%(title)s [%(id)s].%(ext)s"
+    fi
+}
+
+# ========================
+#   Détection et gestion des conflits de fichiers
+#   Anticipe les fichiers deja présents et laisse l'utilisateur décider
+# ========================
+detect_and_handle_conflicts() {
+    local template="$1" tmp_list ext conflicts=() fp=""
+    CONFLICT_MODE=""
+    ext="$(expected_extension)"
+
+    tmp_list="$(mktemp)"
+    # Simulation : calcule la liste des fichiers qui seront écrits
+    if ! yt-dlp --no-warnings --simulate --flat-playlist -o "$TARGET_DIR/$template" \
+            "${YTDLP_ARGS[@]}" --print filename "$URL" > "$tmp_list" 2>/dev/null; then
+        msg_warn "Analyse préalable impossible (URL ou connexion ?). Poursuite sans vérification de conflits."
+        rm -f "$tmp_list"
+        return 0
+    fi
+
+    while IFS= read -r fp || [[ -n "$fp" ]]; do
+        [[ -z "$fp" ]] && continue
+        # Nom final réel : fusion MP4 ou conversion MP3
+        fp="${fp%.*}.$ext"
+        [[ -e "$fp" ]] && conflicts+=("$fp")
+    done < "$tmp_list"
+    rm -f "$tmp_list"
+
+    if [[ ${#conflicts[@]} -eq 0 ]]; then
+        msg_success "Aucun conflit de fichiers détecté."
+        return 0
+    fi
+
+    msg_warn "${#conflicts[@]} fichier(s) déjà présent(s) dans le dossier cible :"
+    printf '   %s\n' "${conflicts[@]}"
+    echo
+    echo "Comment gérer ce conflit ?"
+    echo "  1) Écraser les fichiers existants"
+    echo "  2) Ignorer les fichiers existants (télécharger uniquement les manquants)"
+    echo "  3) Renommer les nouveaux fichiers (ajout d'un numéro) pour éviter tout écrasement"
+    echo
+    while true; do
+        msg_question "Votre choix [1-3] : "
+        read -r reponse_conflit || return 0
+        case "$reponse_conflit" in
+            1) CONFLICT_MODE="overwrite"; return 0 ;;
+            2) CONFLICT_MODE="skip"; return 0 ;;
+            3) CONFLICT_MODE="number"; OUTPUT_TEMPLATE="$(numbered_template)"; return 0 ;;
+            *) msg_warn "Choix invalide. Entrez 1, 2 ou 3." ;;
+        esac
+    done
+}
+
+# ========================
+#   Lancement du téléchargement
+#   Le fichier partiel existant est resume avec --continue
+# ========================
+run_download() {
+    local ligne_hist="${1:-}"
+    local template="$TARGET_DIR/$OUTPUT_TEMPLATE"
+
+    case "$CONFLICT_MODE" in
+        overwrite) YTDLP_ARGS+=(--force-overwrites) ;;
+        skip)      YTDLP_ARGS+=(--no-overwrites -w) ;;
+    esac
+
+    msg_progress "Téléchargement en cours... (peut être long)"
+    if yt-dlp -o "$template" --newline --no-warnings --continue "${YTDLP_ARGS[@]}" "$URL"; then
+        msg_success "Téléchargement terminé !"
+        msg_info "Fichiers enregistrés dans : $TARGET_DIR"
+        [[ -n "$ligne_hist" ]] && history_set_status "$ligne_hist" termine
+        return 0
+    else
+        msg_error "Le téléchargement a échoué. Vérifiez l'URL, la connexion ou les codes de format."
+        [[ -n "$ligne_hist" ]] && history_set_status "$ligne_hist" echoue
+        return 1
+    fi
+}
+
+# ========================
+#   Nouveau téléchargement
+# ========================
+new_download() {
+    local ligne_hist=""
+    echo
+    msg_progress "Nouveau téléchargement"
+    read_url || return 1
+    select_target_dir
+    select_format
+    detect_playlist
+    echo
+    msg_info "Récapitulatif : URL=$URL | Format=$(format_label "$FORMAT_CHOICE" "$FORMAT_CODE") | Dossier=$TARGET_DIR"
+    build_format_args
+    detect_and_handle_conflicts "$OUTPUT_TEMPLATE"
+    # Enregistrer l'entrée comme "en cours" pour permettre la reprise
+    ligne_hist="$(history_add en_cours "$URL" "$FORMAT_CHOICE" "$FORMAT_CODE" "$TARGET_DIR" "$OUTPUT_TEMPLATE")"
+    # Lancer en arrière-plan ou en avant-plan ?
+    ask_run_mode
+    if [[ "$RUN_BACKGROUND" == "true" ]]; then
+        launch_background "$ligne_hist"
+    else
+        if ! run_download "$ligne_hist"; then
+            msg_warn "Le téléchargement a échoué. Vous pourrez le reprendre depuis le menu principal."
+        fi
+    fi
+}
+
+# ========================
+#   Reprendre un téléchargement inachevé
+# ========================
+resume_download() {
+    local i=0 n=0 ligne="" reponse="" line="" full=""
+    if [[ ! -f "$HISTORY_FILE" ]] || [[ ! -s "$HISTORY_FILE" ]]; then
+        msg_warn "Aucun historique de téléchargement."
+        return 1
+    fi
+    echo
+    # Finaliser les téléchargements terminés dont on n'a pas encore vu le résultat
+    sync_history_status
+    echo "Téléchargements inachevés (en cours / échoué) :"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        i=$((i + 1))
+        IFS="$TAB" read -ra F <<< "$line"
+        if [[ "${F[1]}" != "termine" ]]; then
+            # Ne pas proposer les téléchargements encore actifs en arrière-plan
+            local pid_file="$HISTORY_DIR/$i.pid" pid=""
+            if [[ -f "$pid_file" ]]; then
+                read -r pid < "$pid_file" || true
+            fi
+            if [[ "${F[1]}" == "en_cours" ]] && [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+                continue
+            fi
+            n=$((n + 1))
+            echo "  [$i] ${F[2]}  →  ${F[5]}"
+        fi
+    done < "$HISTORY_FILE"
+    if [[ $n -eq 0 ]]; then
+        msg_info "Aucun téléchargement à reprendre."
+        return 1
+    fi
+    echo
+    while true; do
+        msg_question "Numéro à reprendre (0 pour annuler) : "
+        read -r reponse || reponse=""
+        if [[ -z "$reponse" ]]; then
+            msg_info "Retour au menu principal."
+            return 1
+        fi
+        if [[ "$reponse" == "0" ]]; then
+            msg_info "Annulé."
+            return 1
+        fi
+        [[ "$reponse" =~ ^[0-9]+$ ]] || { msg_warn "Numéro invalide."; continue; }
+        full="$(history_get_line "$reponse")" || { msg_warn "Entrée introuvable."; continue; }
+        break
+    done
+    IFS="$TAB" read -ra F <<< "$full"
+    URL="${F[2]}"
+    FORMAT_CHOICE="${F[3]}"
+    FORMAT_CODE="${F[4]}"
+    TARGET_DIR="${F[5]}"
+    OUTPUT_TEMPLATE="${F[6]}"
+    CONFLICT_MODE=""
+    mkdir -p "$TARGET_DIR"
+    msg_info "Reprise du téléchargement #$reponse : $URL"
+    build_format_args
+    ask_run_mode
+    if [[ "$RUN_BACKGROUND" == "true" ]]; then
+        launch_background "$reponse"
+        return 0
+    fi
+    if ! run_download "$reponse"; then
+        msg_warn "Échec de la reprise. Vous pouvez réessayer."
+    fi
+}
+
+# ========================
+#   Arrière-plan (pour le suivi de progression)
+#   Chaque téléchargement en arrière-plan écrit :
+#   - <n>.pid  : PID du processus
+#   - <n>.log  : journal complet + progression yt-dlp
+#   - <n>.exit : code de sortie (0 = réussi, 1 = échec)
+# ========================
+ask_run_mode() {
+    local rep=""
+    RUN_BACKGROUND="false"
+    msg_question "Lancer en arrière-plan pour pouvoir suivre la progression ? [o/N] : "
+    read -r rep || true
+    [[ "$rep" =~ ^[OoYy]$ ]] && RUN_BACKGROUND="true"
+}
+
+# Notification de fin de téléchargement (notify-send ou son)
+notify_end() {
+    local result="$1" url="$2" titre=""
+    if [[ "$CONFIG_NOTIFY_END" != "true" ]]; then
+        return 0
+    fi
+    if command -v notify-send &>/dev/null; then
+        titre="yt_download — téléchargement $result"
+        notify-send -t 8000 "$titre" "$url" >/dev/null 2>&1 || true
+    else
+        # Son (bic) dans le terminal si possible
+        printf '\a' > /dev/tty 2>/dev/null || true
+    fi
+}
+
+# Lancer yt-dlp en arrière-plan
+launch_background() {
+    local ligne_hist="$1"
+    local template="$TARGET_DIR/$OUTPUT_TEMPLATE"
+    local pid_file="$HISTORY_DIR/$ligne_hist.pid"
+    local log_file="$HISTORY_DIR/$ligne_hist.log"
+    local exit_file="$HISTORY_DIR/$ligne_hist.exit"
+
+    rm -f "$exit_file" "$pid_file"
+    (
+        if yt-dlp --progress -o "$template" --newline --no-warnings --continue "${YTDLP_ARGS[@]}" "$URL"; then
+            echo 0 > "$exit_file"
+            notify_end "réussi" "$URL"
+        else
+            echo 1 > "$exit_file"
+            notify_end "échoué" "$URL"
+        fi
+        rm -f "$pid_file"
+    ) > "$log_file" 2>&1 &
+    local pid=$!
+    echo "$pid" > "$pid_file"
+
+    msg_info "Lancé en arrière-plan (PID $pid). Suivi : menu → option 3."
+    msg_info "Journal : $log_file"
+}
+
+# Dernier pourcentage de progression dans le journal
+last_download_progress() {
+    local ligne_hist="$1"
+    local log_file="$HISTORY_DIR/$ligne_hist.log"
+    local line="" last=""
+    if [[ ! -f "$log_file" ]] || [[ ! -s "$log_file" ]]; then
+        echo "démarrage..."
+        return 0
+    fi
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ \[download\][[:space:]]+[0-9]+(\.[0-9]+)?% ]]; then
+            last="${line#*download]}"
+        fi
+    done < "$log_file"
+    if [[ -z "$last" ]]; then
+        echo "analyse / connexion..."
+        return 0
+    fi
+    # Nettoyer les espaces de tête, réduire la taille
+    last="${last#"${last%%[![:space:]]*}"}"
+    last="${last:0:50}"
+    echo "$last"
+}
+
+# Finaliser les entrées dont le processus s'est terminé
+sync_history_status() {
+    local i=0 line="" pid="" code="" pid_file="" exit_file=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        i=$((i + 1))
+        IFS="$TAB" read -ra F <<< "$line"
+        [[ "${F[1]}" != "en_cours" ]] && continue
+        exit_file="$HISTORY_DIR/$i.exit"
+        [[ -f "$exit_file" ]] || continue
+        code=""
+        read -r code < "$exit_file" || true
+        if [[ "$code" == "0" ]]; then
+            history_set_status "$i" termine
+        else
+            history_set_status "$i" echoue
+        fi
+    done < "$HISTORY_FILE"
+}
+
+# Voir les téléchargements en cours avec leur progression
+show_running_downloads() {
+    echo
+    sync_history_status
+    local i=0 line="" n=0 progress=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        i=$((i + 1))
+        IFS="$TAB" read -ra F <<< "$line"
+        [[ "${F[1]}" != "en_cours" ]] && continue
+        local pid_file="$HISTORY_DIR/$i.pid" pid=""
+        if [[ -f "$pid_file" ]]; then
+            read -r pid < "$pid_file" || true
+        fi
+        if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+            continue
+        fi
+        n=$((n + 1))
+        progress="$(last_download_progress "$i")"
+        echo -e "  ${YELLOW}[$i] EN COURS${NC}  PID ${pid}"
+        echo -e "       ${CYAN}[progression] ${progress}${NC}"
+        echo -e "       URL : ${F[2]}  →  ${F[5]}"
+    done < "$HISTORY_FILE"
+    if [[ $n -eq 0 ]]; then
+        msg_info "Aucun téléchargement en cours. (Les terminés sont finalisés dans l'historique.)"
+    fi
+    echo
+}
+
+# Annuler proprement un téléchargement en cours
+cancel_download() {
+    local numero="$1" pid="" child=""
+    local pid_file="$HISTORY_DIR/$numero.pid"
+    local exit_file="$HISTORY_DIR/$numero.exit"
+    if [[ ! -f "$pid_file" ]]; then
+        msg_warn "#$numero : aucun processus suivi en arrière-plan."
+        return 1
+    fi
+    read -r pid < "$pid_file" || true
+    if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+        msg_warn "#$numero : le processus n'est plus actif."
+        return 1
+    fi
+    msg_progress "Annulation du téléchargement #$numero (PID $pid)..."
+    kill -TERM "$pid" 2>/dev/null || true
+    for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+        kill -TERM "$child" 2>/dev/null || true
+    done
+    sleep 1
+    kill -KILL "$pid" 2>/dev/null || true
+    echo 1 > "$exit_file"
+    history_set_status "$numero" echoue
+    msg_warn "#$numero annulé. Le fichier partiel pourra être repris (menu 2)."
+}
+
+# Suivi en continu : rafraîchissement toutes les 2 secondes (vue live)
+follow_running_downloads() {
+    local key="" refreshes=0
+    while true; do
+        [[ -t 1 ]] && clear 2>/dev/null || true
+        show_running_downloads || true
+        echo
+        if [[ -t 0 ]]; then
+            msg_question "[#] annuler ce téléchargement   [Q] quitter   ENTRÉE = rafraîchir (2 s) : "
+            read -r -t 2 -n 1 key || key=""
+            if [[ "$key" == "q" || "$key" == "Q" ]]; then
+                echo
+                return 0
+            fi
+            if [[ "$key" =~ ^[0-9]+$ ]]; then
+                cancel_download "$key"
+                sleep 1
+            fi
+        else
+            # Entrée non interactive : quelques rafraîchissements puis retour
+            refreshes=$((refreshes + 1))
+            echo "(entrée non interactive — rafraîchissement $refreshes/3)"
+            if [[ $refreshes -ge 3 ]]; then
+                return 0
+            fi
+        fi
+    done
+}
+
+# ========================
+#   Menu principal
+# ========================
+show_main_menu() {
+    local choix_menu=""
+    while true; do
+        echo
+        msg_info "Que souhaitez-vous faire ?"
+        echo "  1) Nouveau téléchargement"
+        echo "  2) Reprendre un téléchargement inachevé"
+        echo "  3) Suivre les téléchargements en cours (progression)"
+        echo "  4) Configuration"
+        echo "  5) Voir tout l'historique"
+        echo "  6) Quitter"
+        echo
+        msg_question "Votre choix [1-6] : "
+        read -r choix_menu || exit 0
+        case "$choix_menu" in
+            1) new_download ;;
+            2) resume_download || true ;;
+            3) follow_running_downloads ;;
+            4) config_menu ;;
+            5) history_list || true ;;
+            6) msg_info "Au revoir !"; exit 0 ;;
+            *) msg_warn "Choix invalide. Entrez un chiffre entre 1 et 6." ;;
+        esac
+    done
+}
+
+# ========================
+#   Bandeau de démarrage
+# ========================
+banner() {
+    echo
+    echo -e "${BOLD}${CYAN}=== yt_download : cours, playlists & livres audio ===${NC}"
+    echo
+}
+
+# ========================
+#   Point d'entrée
+# ========================
+case "${1:-}" in
+    --help|-h) show_help ;;
+    --version) show_version ;;
+esac
+
+trap 'echo; msg_warn "Opération interrompue."; exit 130' INT TERM
+
+# Vérification stricte des dépendances AVANT toute opération
+if ! check_dependencies; then
+    msg_info "Veuillez installer les outils manquants puis relancer le script."
+    exit 1
+fi
+
+main() {
+    load_config
+    banner
+    show_main_menu
+}
+
+main
