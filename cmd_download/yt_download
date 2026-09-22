@@ -327,6 +327,19 @@ read_url() {
     done
 }
 
+# Étape 1bis — Vérification que le lien est valide AVANT de poser les
+# questions de détail (dossier, format...). On n'avance pas tant que le
+# lien n'est pas confirmé, pour ne pas faire répondre l'utilisateur pour rien.
+validate_url() {
+    local titre=""
+    msg_progress "Vérification du lien (yt-dlp)..."
+    if ! titre="$(yt-dlp --simulate --no-warnings --playlist-items 1 --print "%(title)s" "$URL" 2>/dev/null)"; then
+        msg_error "Le lien est invalide ou inaccessible. Veuillez vérifier l'URL puis recommencer."
+        return 1
+    fi
+    msg_success "Lien valide : ${titre:-$(echo "$URL")}"
+}
+
 # ========================
 #   Étape 2 — Dossier cible
 # ========================
@@ -541,6 +554,7 @@ new_download() {
     echo
     msg_progress "Nouveau téléchargement"
     read_url || return 1
+    validate_url || return 1
     select_target_dir
     select_format
     detect_playlist
@@ -641,8 +655,9 @@ ask_run_mode() {
     local rep=""
     RUN_BACKGROUND="false"
     msg_question "Lancer en arrière-plan pour pouvoir suivre la progression ? [o/N] : "
-    read -r rep || true
+    read -r rep || rep=""
     [[ "$rep" =~ ^[OoYy]$ ]] && RUN_BACKGROUND="true"
+    return 0
 }
 
 # Notification de fin de téléchargement (notify-send ou son)
@@ -907,10 +922,10 @@ show_main_menu() {
         msg_question "Votre choix [1-6] : "
         read -r choix_menu || exit 0
         case "$choix_menu" in
-            1) new_download ;;
+            1) new_download || true ;;
             2) resume_download || true ;;
-            3) follow_running_downloads ;;
-            4) config_menu ;;
+            3) follow_running_downloads || true ;;
+            4) config_menu || true ;;
             5) history_list || true ;;
             6) msg_info "Au revoir !"; exit 0 ;;
             *) msg_warn "Choix invalide. Entrez un chiffre entre 1 et 6." ;;

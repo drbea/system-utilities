@@ -357,12 +357,13 @@ yt_download
 Flux interactif :
 
 1. Coller l'URL du media (video, playlist ou livre audio).
-2. Choisir le dossier cible (defaut : `~/Videos`, modifiable dans la configuration).
-3. Choisir le format :
+2. Le lien est **verifie par yt-dlp** avant toute question detaillee : si l'URL est invalide ou inaccessible, le script l'annonce et revient au menu, sans faire repondre l'utilisateur pour rien.
+3. Choisir le dossier cible (defaut : `~/Videos`, modifiable dans la configuration).
+4. Choisir le format :
    - **1** : Video (meilleure qualite par defaut)
    - **2** : Video (choisir une qualite specifique via `yt-dlp -F`)
    - **3** : Audio uniquement (extraction MP3, qualite maximale)
-4. Choisir d'executer en arriere-plan pour suivre la progression.
+5. Choisir d'executer en arriere-plan pour suivre la progression.
 
 ### Menu principal
 
