@@ -33,6 +33,7 @@ msg_question() { echo -en "${BOLD}[?]${NC} $*"; }
 # ========================
 HISTORY_DIR="$HOME/.local/share/yt_download"
 HISTORY_FILE="$HISTORY_DIR/history"
+HIDDEN_FILE="$HISTORY_DIR/hidden"
 TAB=$'\t'
 
 # Ajouter une entrée et imprimer son numéro de ligne
@@ -284,6 +285,7 @@ Télécharge des cours (vidéos, playlists) ou des livres audio
 via yt-dlp et ffmpeg, avec :
   - historique et reprise des téléchargements inachevés
   - suivi de progression (vue live toutes les 2 s)
+  - masquage d'un téléchargement en cours pour continuer ailleurs (réaffichage possible)
   - annulation propre d'un téléchargement en cours
   - notification de fin, limite de débit, archive anti re-téléchargement
   - sous-titres et chapitres pour les cours
@@ -311,14 +313,17 @@ show_version() {
 read_url() {
     URL=""
     while [[ -z "$URL" ]]; do
-        msg_question "Collez l'URL du média (vidéo, playlist ou livre audio) : "
+        msg_question "Collez l'URL du média (vidéo, playlist ou livre audio) (0 pour annuler) : "
         if ! read -r URL; then
-            msg_warn "Saisie interrompue."
+            msg_info "Retour au menu principal."
             return 1
         fi
         # Supprimer les espaces éventuels autour de l'URL
         URL="${URL//[[:space:]]/}"
-        [[ -n "$URL" ]] || msg_warn "L'URL est vide. Veuillez coller une URL valide."
+        if [[ -z "$URL" || "$URL" == "0" ]]; then
+            msg_info "Retour au menu principal."
+            return 1
+        fi
     done
 }
 
@@ -722,13 +727,47 @@ sync_history_status() {
             history_set_status "$i" echoue
         fi
     done < "$HISTORY_FILE"
+    prune_hidden
+}
+
+# Nettoyer la liste des masqués : ne garder que les téléchargements encore actifs
+prune_hidden() {
+    [[ -f "$HIDDEN_FILE" ]] || return 0
+    local hnum="" i=0 line="" status="" keep=""
+    while IFS= read -r hnum || [[ -n "$hnum" ]]; do
+        i=0
+        status=""
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            i=$((i + 1))
+            [[ "$i" == "$hnum" ]] || continue
+            IFS="$TAB" read -ra F <<< "$line"
+            status="${F[1]}"
+            break
+        done < "$HISTORY_FILE"
+        # On garde seulement les entrées encore en cours (statut en_cours)
+        if [[ "$status" == "en_cours" ]]; then
+            keep="${keep}${hnum}\n"
+        fi
+    done < "$HIDDEN_FILE"
+    if [[ -z "$keep" ]]; then
+        rm -f "$HIDDEN_FILE"
+    else
+        printf '%b' "$keep" > "$HIDDEN_FILE"
+    fi
 }
 
 # Voir les téléchargements en cours avec leur progression
+# Les téléchargements "masqués" sont cachés de la vue mais continuent
+# de télécharger ; ils restent dans la liste des non-masqués via R#.
 show_running_downloads() {
     echo
     sync_history_status
-    local i=0 line="" n=0 progress=""
+    local i=0 line="" n=0 nb_caches=0 progress=""
+    local caches=""
+    if [[ -f "$HIDDEN_FILE" ]]; then
+        caches="$(tr '\n' ',' < "$HIDDEN_FILE")"
+        caches="${caches%,}"
+    fi
     while IFS= read -r line || [[ -n "$line" ]]; do
         i=$((i + 1))
         IFS="$TAB" read -ra F <<< "$line"
@@ -740,6 +779,11 @@ show_running_downloads() {
         if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
             continue
         fi
+        # Téléchargements masqués : on les compte mais on ne les affiche pas
+        if [[ -n "$caches" ]] && [[ ",$caches," == *",$i,"* ]]; then
+            nb_caches=$((nb_caches + 1))
+            continue
+        fi
         n=$((n + 1))
         progress="$(last_download_progress "$i")"
         echo -e "  ${YELLOW}[$i] EN COURS${NC}  PID ${pid}"
@@ -749,7 +793,41 @@ show_running_downloads() {
     if [[ $n -eq 0 ]]; then
         msg_info "Aucun téléchargement en cours. (Les terminés sont finalisés dans l'historique.)"
     fi
+    if [[ $nb_caches -gt 0 ]]; then
+        msg_info "$nb_caches téléchargement(s) masqué(s) (#$caches) — [R#] pour réafficher."
+    fi
     echo
+}
+
+# Masquer un téléchargement : il continue mais sort de la vue
+hide_download() {
+    local num="${1:-}"
+    if [[ ! "$num" =~ ^[0-9]+$ ]] || [[ -z "$(history_get_line "$num")" ]]; then
+        msg_warn "#$num : entrée introuvable."
+        return 1
+    fi
+    mkdir -p "$HISTORY_DIR"
+    if [[ -f "$HIDDEN_FILE" ]] && grep -qx "$num" "$HIDDEN_FILE"; then
+        msg_info "#$num est déjà masqué."
+        return 0
+    fi
+    echo "$num" >> "$HIDDEN_FILE"
+    msg_info "#$num masqué. Le téléchargement continue en arrière-plan, [R$num] pour réafficher."
+}
+
+# Réafficher un téléchargement masqué
+reveal_download() {
+    local num="${1:-}" tmp=""
+    if [[ -z "$num" ]] || [[ ! -f "$HIDDEN_FILE" ]] || ! grep -qx "$num" "$HIDDEN_FILE"; then
+        msg_warn "#$num n'est pas masqué."
+        return 1
+    fi
+    tmp="$(grep -vx "$num" "$HIDDEN_FILE" 2>/dev/null || true)"
+    : > "$HIDDEN_FILE"
+    if [[ -n "$tmp" ]]; then
+        printf '%s\n' "$tmp" > "$HIDDEN_FILE"
+    fi
+    msg_info "#$num réaffiché."
 }
 
 # Annuler proprement un téléchargement en cours
@@ -779,23 +857,27 @@ cancel_download() {
 }
 
 # Suivi en continu : rafraîchissement toutes les 2 secondes (vue live)
+# Commandes : [#] annuler   [H#] masquer   [R#] réafficher   [Q] quitter
 follow_running_downloads() {
-    local key="" refreshes=0
+    local key="" refreshes=0 cmd=""
     while true; do
         [[ -t 1 ]] && clear 2>/dev/null || true
         show_running_downloads || true
         echo
         if [[ -t 0 ]]; then
-            msg_question "[#] annuler ce téléchargement   [Q] quitter   ENTRÉE = rafraîchir (2 s) : "
-            read -r -t 2 -n 1 key || key=""
-            if [[ "$key" == "q" || "$key" == "Q" ]]; then
-                echo
-                return 0
-            fi
-            if [[ "$key" =~ ^[0-9]+$ ]]; then
-                cancel_download "$key"
-                sleep 1
-            fi
+            msg_question "[#] annuler   [H#] masquer   [R#] réafficher   [Q] quitter   ENTRÉE = rafraîchir (2 s) : "
+            read -r -t 2 -n 3 key || key=""
+            cmd="${key,,}"
+            case "$cmd" in
+                q)
+                    echo
+                    return 0
+                    ;;
+                [0-9]*) cancel_download "$cmd" ;;
+                h[0-9]*) hide_download "${cmd#h}" ;;
+                r[0-9]*) reveal_download "${cmd#r}" ;;
+                *) ;;
+            esac
         else
             # Entrée non interactive : quelques rafraîchissements puis retour
             refreshes=$((refreshes + 1))

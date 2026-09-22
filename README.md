@@ -368,7 +368,7 @@ Flux interactif :
 
 1. **Nouveau telechargement**
 2. **Reprendre** un telechargement inacheve (en cours / echoue)
-3. **Suivre les telechargements en cours** (rafraichissement toutes les 2 s, `#` pour annuler proprement, `Q` pour quitter)
+3. **Suivre les telechargements en cours** (rafraichissement toutes les 2 s ; `#` annuler, `H#` masquer un telechargement pour continuer ailleurs, `R#` réafficher, `Q` quitter)
 4. **Configuration** (preferences persistantes)
 5. **Historique** complet
 6. **Quitter**
@@ -378,6 +378,7 @@ Flux interactif :
 - Chaque telechargement lance en arriere-plan est journalise (`~/.local/share/yt_download/<n>.log`) avec son PID et son code de sortie.
 - Vitesse, ETA et avancement sont affiches en direct. A la fin, une notification (`notify-send` ou son) signale le resultat.
 - On peut lancer plusieurs telechargements simultanement et les suivre dans une meme vue.
+- Un telechargement en cours peut etre **masque** (`H#`) : il continue en arriere-plan mais disparaît de la vue, ce qui laisse la place pour d'autres actions ; `R#` le réaffiche.
 
 ### Preferences (~/.config/yt_download/config)
 
